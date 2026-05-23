@@ -1,0 +1,5584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2A4A7F">
+<title>Little Hop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky-top: #A8D8F0;
+    --sky-bot: #FFD9B8;
+    --ground: #5C8A3A;
+    --ground-deep: #3F6624;
+    --ground-top: #7DB04E;
+    --platform: #C9A876;
+    --platform-deep: #8B6F3F;
+    --ink: #2A4A7F;
+    --ink-soft: #5B7BAA;
+    --accent: #FF8FA3;
+    --accent-deep: #E66B82;
+    --gold: #FFD24D;
+    --paper: #FFF8E8;
+    --danger: #FF6B6B;
+    --danger-deep: #D14242;
+    --shadow: 0 4px 0 rgba(42, 74, 127, 0.15);
+    --shadow-lg: 0 8px 24px rgba(42, 74, 127, 0.2);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper);
+    font-family: 'Quicksand', system-ui, sans-serif;
+    color: var(--ink);
+    overscroll-behavior: none;
+    overflow: hidden;
+    height: 100dvh;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Sky background — visible behind canvas */
+  body {
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bot) 100%);
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    position: relative;
+  }
+
+  /* ===== HUD ===== */
+  .hud {
+    position: absolute;
+    top: env(safe-area-inset-top);
+    left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .hud > * { pointer-events: auto; }
+  .hud-badge {
+    background: rgba(255, 248, 232, 0.92);
+    border-radius: 14px;
+    padding: 8px 14px;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .hud-btn {
+    background: rgba(255, 248, 232, 0.92);
+    border: none;
+    border-radius: 14px;
+    width: 44px; height: 44px;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hud-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(42, 74, 127, 0.15); }
+
+  /* ===== Game canvas ===== */
+  .game-wrap {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    min-height: 0;
+    position: relative;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+  }
+
+  /* ===== Touch controls ===== */
+  .touch-controls {
+    position: absolute;
+    bottom: env(safe-area-inset-bottom);
+    left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 16px 16px;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .touch-left, .touch-right {
+    display: flex;
+    gap: 10px;
+    pointer-events: auto;
+  }
+  .touch-btn {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: rgba(255, 248, 232, 0.85);
+    border: 3px solid rgba(42, 74, 127, 0.15);
+    font-size: 26px;
+    color: var(--ink);
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .touch-btn.jump {
+    width: 80px; height: 80px;
+    background: rgba(255, 143, 163, 0.92);
+    color: white;
+    font-size: 30px;
+    border-color: rgba(230, 107, 130, 0.4);
+  }
+  .touch-btn:active { transform: scale(0.92); }
+  .touch-btn.pressed { transform: scale(0.92); background: rgba(255, 210, 77, 0.95); }
+
+  /* Hide touch controls on devices with a real keyboard (rough heuristic) */
+  @media (hover: hover) and (pointer: fine) {
+    .touch-controls { display: none; }
+  }
+
+  /* ===== Panels (settings, level picker) ===== */
+  .scrim {
+    position: fixed; inset: 0;
+    background: rgba(42, 74, 127, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 50;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--paper);
+    border-top-left-radius: 28px;
+    border-top-right-radius: 28px;
+    padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
+    z-index: 60;
+    transform: translateY(100%);
+    transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+    max-height: 88dvh;
+    overflow-y: auto;
+    box-shadow: 0 -8px 32px rgba(42, 74, 127, 0.25);
+  }
+  .panel.open { transform: translateY(0); }
+  .panel h2 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    margin: 0 0 4px;
+  }
+  .panel .grab {
+    width: 40px; height: 4px; border-radius: 2px;
+    background: rgba(42, 74, 127, 0.2);
+    margin: 0 auto 12px;
+  }
+  .field { margin: 14px 0; }
+  .field-label {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    background: white;
+    color: var(--ink);
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-size: 18px;
+    border: 3px solid transparent;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    touch-action: manipulation;
+    min-width: 56px;
+    text-align: center;
+  }
+  .chip.selected {
+    border-color: var(--accent);
+    background: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(42, 74, 127, 0.15);
+  }
+  .chip:active { transform: translateY(1px); }
+  .chip.text { font-size: 14px; }
+  .chip.stacked {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 12px;
+    min-width: 72px;
+  }
+  .chip.stacked .ch-emoji { font-size: 24px; line-height: 1; margin-bottom: 2px; }
+  .chip.stacked .ch-name  { font-size: 13px; }
+  /* Custom PNG character chip: shows the imported image, with a small
+     delete button in the corner. Sized to match the emoji chips visually. */
+  .chip.char-png {
+    position: relative;
+    padding: 4px;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chip-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+  .chip-delete {
+    position: absolute;
+    top: -6px; right: -6px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: var(--danger-deep);
+    color: white;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chip-delete:active { transform: scale(0.92); }
+  /* Import-new-character chip: dashed border, text label */
+  .chip.chip-import {
+    font-size: 13px;
+    border: 3px dashed rgba(42, 74, 127, 0.3);
+    color: var(--ink-soft);
+    background: transparent;
+    box-shadow: none;
+  }
+  .chip.chip-import:active { transform: translateY(1px); }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+  }
+  .toggle {
+    width: 52px; height: 30px;
+    background: rgba(42, 74, 127, 0.2);
+    border-radius: 15px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: ''; position: absolute;
+    top: 3px; left: 3px;
+    width: 24px; height: 24px;
+    background: white;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    transition: transform 0.2s ease;
+  }
+  .toggle.on::after { transform: translateX(22px); }
+
+  /* ===== Title screen ===== */
+  .title-screen {
+    position: fixed; inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 40;
+    padding: 24px;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bot) 100%);
+    transition: opacity 0.3s ease;
+  }
+  .title-screen.hidden { opacity: 0; pointer-events: none; }
+  .title-logo {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 64px;
+    color: var(--ink);
+    letter-spacing: -2px;
+    text-align: center;
+    line-height: 0.95;
+    text-shadow: 0 4px 0 rgba(255,255,255,0.5);
+    animation: float 3s ease-in-out infinite;
+  }
+  .title-logo .accent { color: var(--accent); }
+  .title-sub {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin: 8px 0 32px;
+    font-size: 18px;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .title-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 280px;
+  }
+  .big-btn {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 16px 24px;
+    border-radius: 18px;
+    cursor: pointer;
+    box-shadow: 0 6px 0 var(--accent-deep);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    touch-action: manipulation;
+  }
+  .big-btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 var(--accent-deep);
+  }
+  .big-btn.secondary {
+    background: white;
+    color: var(--ink);
+    box-shadow: 0 6px 0 rgba(42, 74, 127, 0.2);
+  }
+  .big-btn.secondary:active { box-shadow: 0 2px 0 rgba(42, 74, 127, 0.2); }
+
+  /* ===== Level picker ===== */
+  .levels-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .level-card {
+    background: white;
+    border-radius: 18px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    text-align: center;
+    border: 3px solid transparent;
+    transition: transform 0.1s ease;
+  }
+  .level-card:active { transform: translateY(2px); }
+  .level-card.completed { border-color: var(--gold); }
+  .level-card-num {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 28px;
+    color: var(--ink);
+  }
+  .level-card-name {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  .level-card-star {
+    font-size: 18px;
+    margin-top: 6px;
+    min-height: 22px;
+  }
+
+  /* ===== Win overlay ===== */
+  .win {
+    position: fixed; inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 248, 232, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 70;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .win.open { opacity: 1; pointer-events: auto; }
+  .win-card {
+    background: white;
+    border-radius: 28px;
+    padding: 28px 32px;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    transform: scale(0.8);
+    transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.4);
+    max-width: 320px;
+  }
+  .win.open .win-card { transform: scale(1); }
+  .win-emoji {
+    font-size: 72px; line-height: 1;
+    animation: bounce 0.6s ease infinite alternate;
+  }
+  @keyframes bounce {
+    from { transform: translateY(0); }
+    to { transform: translateY(-10px); }
+  }
+  .win-title {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 32px;
+    margin: 8px 0 4px;
+    color: var(--ink);
+  }
+  .win-sub {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 18px;
+  }
+  .win-actions {
+    display: flex; gap: 10px; justify-content: center;
+    flex-wrap: wrap;
+  }
+  .win-actions button {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    border: none;
+    background: var(--ink);
+    color: white;
+    padding: 12px 18px;
+    border-radius: 14px;
+    font-size: 16px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+  }
+  .win-actions button.primary {
+    background: var(--accent);
+    box-shadow: 0 4px 0 var(--accent-deep);
+  }
+  .win-actions button:active { transform: translateY(2px); }
+
+  /* ===== Editor view ===== */
+  .editor-view {
+    position: fixed; inset: 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 30;
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bot) 100%);
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    transition: opacity 0.2s ease;
+  }
+  .editor-view.hidden { opacity: 0; pointer-events: none; }
+  .editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .editor-header-group { display: flex; gap: 8px; }
+  .editor-world-badge {
+    background: rgba(255, 248, 232, 0.85);
+    border-radius: 12px;
+    padding: 6px 10px;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-soft);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 50%;
+  }
+  .editor-btn {
+    background: rgba(255, 248, 232, 0.95);
+    border: none;
+    border-radius: 14px;
+    padding: 10px 16px;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    touch-action: manipulation;
+  }
+  .editor-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 rgba(42, 74, 127, 0.15); }
+  .editor-btn.primary {
+    background: var(--accent);
+    color: white;
+    box-shadow: 0 4px 0 var(--accent-deep);
+  }
+  .editor-btn.primary:active { box-shadow: 0 2px 0 var(--accent-deep); }
+  .editor-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .editor-btn.icon-only {
+    width: 44px;
+    padding: 10px 0;
+    justify-content: center;
+    font-size: 22px;
+  }
+
+  .editor-canvas-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    padding: 4px;
+    position: relative;
+  }
+  #editorCanvas {
+    display: block;
+    background: var(--paper);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    touch-action: none;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .palette {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+    gap: 6px;
+    padding: 8px 10px 10px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 56px;
+  }
+  .palette-item {
+    flex: 0 0 auto;
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    background: white;
+    border: 3px solid transparent;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    touch-action: manipulation;
+    position: relative;
+  }
+  .palette-item.selected {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+    box-shadow: 0 7px 0 rgba(42, 74, 127, 0.15);
+  }
+  .palette-item:active { transform: translateY(1px); }
+  .palette-item canvas {
+    width: 32px;
+    height: 32px;
+    pointer-events: none;
+  }
+
+  .editor-toast {
+    position: fixed;
+    top: calc(env(safe-area-inset-top) + 60px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--ink);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 14px;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    box-shadow: var(--shadow-lg);
+    z-index: 80;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  }
+  .editor-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Name dialog */
+  .dialog {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 75;
+    background: rgba(42, 74, 127, 0.45);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .dialog.open { opacity: 1; pointer-events: auto; }
+  .dialog-card {
+    background: var(--paper);
+    border-radius: 24px;
+    padding: 24px;
+    width: 90%;
+    max-width: 380px;
+    box-shadow: var(--shadow-lg);
+    transform: scale(0.9);
+    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  }
+  .dialog.open .dialog-card { transform: scale(1); }
+  .dialog-title {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 22px;
+    margin: 0 0 14px;
+  }
+  .dialog input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 3px solid rgba(42, 74, 127, 0.15);
+    border-radius: 14px;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--ink);
+    background: white;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .dialog input:focus { border-color: var(--accent); }
+  .dialog-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .dialog-actions button { flex: 1; }
+
+  /* Character import dialog */
+  .char-import-preview {
+    width: 140px;
+    height: 140px;
+    margin: 0 auto 14px;
+    background:
+      linear-gradient(45deg, rgba(42, 74, 127, 0.08) 25%, transparent 25%) 0 0 / 16px 16px,
+      linear-gradient(-45deg, rgba(42, 74, 127, 0.08) 25%, transparent 25%) 0 0 / 16px 16px,
+      linear-gradient(45deg, transparent 75%, rgba(42, 74, 127, 0.08) 75%) 0 0 / 16px 16px,
+      linear-gradient(-45deg, transparent 75%, rgba(42, 74, 127, 0.08) 75%) 0 0 / 16px 16px,
+      white;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  #charImportImg {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: transform 0.2s ease;
+  }
+  #charImportImg.flipped { transform: scaleX(-1); }
+  .char-import-hint {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  /* User level card extras */
+  .level-card.user {
+    border-color: var(--accent);
+  }
+  .level-card-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 6px;
+  }
+  .level-card-actions button {
+    background: var(--ink);
+    border: none;
+    color: white;
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .level-card-actions button.del { background: var(--danger-deep); }
+
+  .section-label {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 18px 0 8px;
+  }
+  .section-label:first-child { margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HUD -->
+  <div class="hud" id="hud" style="display:none;">
+    <button class="hud-btn" id="backBtn" aria-label="Back">←</button>
+    <div class="hud-badge"><span id="coinsCount">0</span> 🌟</div>
+    <button class="hud-btn" id="settingsBtn" aria-label="Settings">⚙️</button>
+  </div>
+
+  <!-- Game canvas -->
+  <div class="game-wrap">
+    <canvas id="game"></canvas>
+  </div>
+
+  <!-- Touch controls -->
+  <div class="touch-controls" id="touchControls" style="display:none;">
+    <div class="touch-left">
+      <button class="touch-btn" data-key="left">◀</button>
+      <button class="touch-btn" data-key="right">▶</button>
+    </div>
+    <div class="touch-right">
+      <button class="touch-btn jump" data-key="jump">▲</button>
+    </div>
+  </div>
+</div>
+
+<!-- Title screen -->
+<div class="title-screen" id="titleScreen">
+  <div class="title-logo">Little<br><span class="accent">Hop</span></div>
+  <div class="title-sub">a little adventure ✨</div>
+  <div class="title-buttons">
+    <button class="big-btn" id="playBtn">Play ▶</button>
+    <button class="big-btn secondary" id="makeBtn">Make a Level ✏️</button>
+    <button class="big-btn secondary" id="charBtn">Choose Character</button>
+  </div>
+</div>
+
+<!-- Level picker panel -->
+<div class="scrim" id="scrim"></div>
+
+<div class="panel" id="levelsPanel">
+  <div class="grab"></div>
+  <h2>Pick a Level</h2>
+  <div class="levels-grid" id="levelsGrid"></div>
+</div>
+
+<!-- Settings panel -->
+<div class="panel" id="settingsPanel">
+  <div class="grab"></div>
+  <h2>Settings</h2>
+
+  <div class="field">
+    <div class="field-label">Character</div>
+    <div class="chips" id="charChips"></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Enemy</div>
+    <div class="chips" id="enemyChips"></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Speed</div>
+    <div class="chips" id="speedChips"></div>
+  </div>
+
+  <div class="field">
+    <div class="toggle-row">
+      <div class="field-label" style="margin:0;">Sound</div>
+      <div class="toggle" id="soundToggle"></div>
+    </div>
+    <div class="toggle-row">
+      <div class="field-label" style="margin:0;">On-screen buttons</div>
+      <div class="toggle" id="touchToggle"></div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:10px; margin-top:18px;">
+    <button class="big-btn secondary" style="flex:1; font-size:18px;" id="closeSettingsBtn">Close</button>
+  </div>
+</div>
+
+<!-- Win overlay -->
+<div class="win" id="winOverlay">
+  <div class="win-card">
+    <div class="win-emoji" id="winEmoji">🎉</div>
+    <div class="win-title" id="winTitle">You did it!</div>
+    <div class="win-sub" id="winSub"></div>
+    <div class="win-actions">
+      <button id="winLevelsBtn">Levels</button>
+      <button id="winNextBtn" class="primary">Next ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- Editor view -->
+<div class="editor-view hidden" id="editorView">
+  <div class="editor-header">
+    <div class="editor-header-group">
+      <button class="editor-btn icon-only" id="editorBackBtn" aria-label="Back">←</button>
+      <button class="editor-btn" id="editorSaveBtn">Save 💾</button>
+    </div>
+    <div class="editor-world-badge" id="editorWorldBadge" title="World (locked at level creation)"></div>
+    <div class="editor-header-group">
+      <button class="editor-btn primary" id="editorTestBtn">Test ▶</button>
+    </div>
+  </div>
+  <div class="editor-canvas-wrap">
+    <canvas id="editorCanvas"></canvas>
+  </div>
+  <div class="palette" id="palette"></div>
+</div>
+
+<!-- Toast (appears in editor for "Saved!" etc) -->
+<div class="editor-toast" id="toast"></div>
+
+<!-- Size picker panel -->
+<div class="panel" id="sizePanel">
+  <div class="grab"></div>
+  <h2>New Level</h2>
+  <div class="field">
+    <div class="field-label">Pick a size</div>
+    <div class="chips" id="sizeChips">
+      <div class="chip text" data-size="small">Small<br><span style="font-size:11px; opacity:0.7;">16 × 10</span></div>
+      <div class="chip text" data-size="medium">Medium<br><span style="font-size:11px; opacity:0.7;">24 × 14</span></div>
+      <div class="chip text" data-size="large">Large<br><span style="font-size:11px; opacity:0.7;">32 × 18</span></div>
+    </div>
+  </div>
+  <div class="field">
+    <div class="field-label">Pick a world</div>
+    <div class="chips" id="worldChips"></div>
+  </div>
+  <div style="display:flex; gap:10px; margin-top:18px;">
+    <button class="big-btn secondary" style="flex:1; font-size:18px;" id="sizeCancelBtn">Cancel</button>
+    <button class="big-btn" style="flex:1; font-size:18px;" id="sizeCreateBtn">Create ▶</button>
+  </div>
+</div>
+
+<!-- Name dialog -->
+<div class="dialog" id="nameDialog">
+  <div class="dialog-card">
+    <div class="dialog-title" id="nameDialogTitle">Name your level</div>
+    <input id="nameInput" type="text" maxlength="30" placeholder="My Awesome Level">
+    <div class="dialog-actions">
+      <button class="editor-btn" id="nameCancelBtn">Cancel</button>
+      <button class="editor-btn primary" id="nameSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom character import: hidden file input + dialog with preview/name/flip -->
+<input type="file" id="charImportFile" accept="image/*" style="display:none;">
+<div class="dialog" id="charImportDialog">
+  <div class="dialog-card">
+    <div class="dialog-title">Add a character</div>
+    <div class="char-import-preview">
+      <img id="charImportImg" alt="">
+    </div>
+    <input id="charImportName" type="text" maxlength="20" placeholder="Name (e.g. Ella)">
+    <button class="editor-btn" id="charImportFlipBtn" style="width:100%; justify-content:center; margin-top:10px;">↔ Flip</button>
+    <div class="char-import-hint">Tap ↔ if your character faces the wrong way when running.</div>
+    <div class="dialog-actions">
+      <button class="editor-btn" id="charImportCancelBtn">Cancel</button>
+      <button class="editor-btn primary" id="charImportSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom enemy import: same shape as character import -->
+<input type="file" id="enemyImportFile" accept="image/*" style="display:none;">
+<div class="dialog" id="enemyImportDialog">
+  <div class="dialog-card">
+    <div class="dialog-title">Add an enemy</div>
+    <div class="char-import-preview">
+      <img id="enemyImportImg" alt="">
+    </div>
+    <input id="enemyImportName" type="text" maxlength="20" placeholder="Name (e.g. Big Bad Wolf)">
+    <button class="editor-btn" id="enemyImportFlipBtn" style="width:100%; justify-content:center; margin-top:10px;">↔ Flip</button>
+    <div class="char-import-hint">Tap ↔ if your enemy faces the wrong way when patrolling.</div>
+    <div class="dialog-actions">
+      <button class="editor-btn" id="enemyImportCancelBtn">Cancel</button>
+      <button class="editor-btn primary" id="enemyImportSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =========================================================
+// LITTLE HOP — a tiny platformer
+// Architecture: tile-based world, AABB physics, level data
+// stored as string arrays. Built for a 5yo: gentle, can't
+// really lose, levels are easy to add and (later) edit.
+// =========================================================
+
+// ---------- Character options ----------
+// Built-in emoji characters. Symmetric or front-facing so the squash-and-
+// stretch flip on `facing` is invisible — no defaultFacing needed.
+const CHARACTERS = [
+  { id: 'bunny',  emoji: '🐰', name: 'Bunny' },
+  { id: 'fox',    emoji: '🦊', name: 'Fox' },
+  { id: 'frog',   emoji: '🐸', name: 'Frog' },
+  { id: 'unicorn',emoji: '🦄', name: 'Unicorn' },
+  { id: 'kitten', emoji: '🐱', name: 'Kitten' },
+  { id: 'duck',   emoji: '🐥', name: 'Duck' },
+  { id: 'mouse',  emoji: '🐭', name: 'Mouse' },
+  { id: 'panda',  emoji: '🐼', name: 'Panda' }
+];
+
+// Custom user-imported characters. Each has:
+//   { id: 'cc_...', name, image: 'data:image/...;base64,...', defaultFacing }
+// `image` is a data URL so the whole character travels in localStorage
+// without needing files or a server. `defaultFacing` is 1 if the source
+// PNG faces right (the common case for side-scrollers), -1 if it faces
+// left. drawPlayer uses it to decide whether to mirror.
+let customCharacters = loadJSON('littlehop.customCharacters', []);
+// Unlike saveSettings/saveProgress, this CAN throw on quota errors and the
+// caller needs to know about it (so it can undo the in-memory push and warn
+// the user). The standard saveJSON helper swallows errors, which would leave
+// the new character in memory but missing from storage — a silent loss after
+// refresh. So we do the localStorage call directly here.
+function saveCustomCharacters() {
+  localStorage.setItem('littlehop.customCharacters', JSON.stringify(customCharacters));
+}
+
+// Cache of loaded Image objects keyed by character id, so a PNG isn't
+// re-decoded every frame. Populated lazily by getCharImage.
+const charImageCache = {};
+function getCharImage(char) {
+  if (!char || !char.image) return null;
+  let img = charImageCache[char.id];
+  if (img) return img;
+  img = new Image();
+  img.src = char.image;
+  charImageCache[char.id] = img;
+  return img;
+}
+
+// Resolves a character id (built-in or custom) to the full record.
+// Falls back to the first built-in character if the id doesn't match
+// anything — covers deleted custom characters and stale saved settings.
+function getCharacter(id) {
+  for (const c of CHARACTERS) if (c.id === id) return c;
+  for (const c of customCharacters) if (c.id === id) return c;
+  return CHARACTERS[0];
+}
+
+function makeCharacterId() {
+  return 'cc_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+}
+
+// ---------- Custom enemies ----------
+// Same shape as custom characters: { id: 'ce_...', name, image, defaultFacing }.
+// Stored in localStorage under littlehop.customEnemies.
+let customEnemies = loadJSON('littlehop.customEnemies', []);
+function saveCustomEnemies() {
+  // Direct setItem so quota errors surface (saveJSON would swallow them).
+  localStorage.setItem('littlehop.customEnemies', JSON.stringify(customEnemies));
+}
+
+const enemyImageCache = {};
+function getEnemyImage(enemy) {
+  if (!enemy || !enemy.image) return null;
+  let img = enemyImageCache[enemy.id];
+  if (img) return img;
+  img = new Image();
+  img.src = enemy.image;
+  enemyImageCache[enemy.id] = img;
+  return img;
+}
+
+function makeEnemyId() {
+  return 'ce_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+}
+
+// Resolves the "active enemy" to either a custom PNG record (if settings
+// points at one) or the literal string 'world' meaning "use whichever
+// world's built-in enemy is active." This indirection lets the same
+// settings choice work across multiple worlds.
+function getActiveEnemyChoice() {
+  const id = settings.enemyId;
+  if (!id || id === 'world') return 'world';
+  for (const e of customEnemies) if (e.id === id) return e;
+  // Stale or deleted — fall back to the world's built-in.
+  return 'world';
+}
+
+// ---------- Tile legend ----------
+// .  empty
+// =  grass top  (solid)
+// #  dirt        (solid)
+// _  thin platform (solid only from above — but for v1 fully solid is fine)
+// *  collectible A (star/rainbow/etc — varies by world)
+// +  collectible B (flower/gem/etc — varies by world)
+// X  danger (spikes/water)
+// G  goal (flag)
+// S  start point
+// W  enemy spawn (patrols the platform it stands on, bounces player)
+// C  checkpoint (auto when landing on platform — explicit not needed for v1)
+const TILE = {
+  EMPTY: '.', GRASS: '=', DIRT: '#', PLATFORM: '_',
+  STAR: '*', COLLECT_B: '+', DANGER: 'X', GOAL: 'G', START: 'S',
+  ENEMY: 'W'
+};
+const SOLID = new Set([TILE.GRASS, TILE.DIRT, TILE.PLATFORM]);
+
+// =========================================================
+// WORLDS REGISTRY
+// =========================================================
+// A "world" bundles theme + collectibles + (later) a built-in enemy.
+// All drawing functions take an explicit `c` (canvas 2D context) and `cs`
+// (cell size in pixels) so they work identically in the gameplay canvas
+// AND the editor canvas. They never read `ctx` or `tileSize` globals.
+//
+// In Pass 1 step 2 we have only one world (Sunny Meadow); step 4 will
+// add Rainbow Castle and introduce CSS-variable palette swaps. For now
+// `palette` is included as documentation only — meadow's colors already
+// match the :root variables.
+//
+// Function signatures:
+//   drawGround/drawDirt/drawPlatform/drawSpikes(c, sx, sy, tx, ty, cs)
+//   drawBackground(c, w, h, world)
+//   drawGoal(c, gx, gy, cs, wave)
+//   collectibleA.draw(c, cx, cy, cs, bob)
+//   collectibleB.draw(c, cx, cy, cs, bob)
+// =========================================================
+
+const WORLDS = {
+  meadow: {
+    id: 'meadow',
+    name: 'Sunny Meadow',
+    emoji: '🌳',
+    // Reference values for the meadow palette. applyWorld() writes these
+    // to :root when this world becomes active, so engine code reading
+    // getCSS('--ground') etc. picks up the right colors automatically.
+    palette: {
+      '--sky-top':       '#A8D8F0',
+      '--sky-bot':       '#FFD9B8',
+      '--ground':        '#5C8A3A',
+      '--ground-deep':   '#3F6624',
+      '--ground-top':    '#7DB04E',
+      '--platform':      '#C9A876',
+      '--platform-deep': '#8B6F3F'
+    },
+
+    // Cloud positions live with the world so each world can have its
+    // own atmosphere later (castle gets a rainbow arc instead of clouds).
+    clouds: Array.from({ length: 6 }, () => ({
+      x: Math.random() * 30,
+      y: 1 + Math.random() * 4,
+      scale: 0.7 + Math.random() * 0.6
+    })),
+
+    drawGround(c, sx, sy, tx, ty, cs) {
+      // Grass on top, dirt below
+      c.fillStyle = getCSS('--ground');
+      c.fillRect(sx, sy + cs * 0.2, cs, cs * 0.8);
+      c.fillStyle = getCSS('--ground-top');
+      c.fillRect(sx, sy, cs, cs * 0.25);
+      // grass tufts
+      c.fillStyle = getCSS('--ground-deep');
+      for (let i = 0; i < 3; i++) {
+        const gx = sx + cs * (0.2 + i * 0.3);
+        c.fillRect(gx, sy + cs * 0.05, 2, 4);
+      }
+    },
+
+    drawDirt(c, sx, sy, tx, ty, cs) {
+      c.fillStyle = getCSS('--ground-deep');
+      c.fillRect(sx, sy, cs, cs);
+      c.fillStyle = 'rgba(0,0,0,0.08)';
+      // pebbles — deterministic per tile so they don't shimmer
+      const seed = ((tx || 0) * 31 + (ty || 0) * 17) % 7;
+      c.fillRect(sx + 4 + seed, sy + 8, 4, 4);
+      c.fillRect(sx + cs - 12 - seed, sy + cs - 14, 3, 3);
+    },
+
+    drawPlatform(c, sx, sy, tx, ty, cs) {
+      c.fillStyle = getCSS('--platform');
+      c.fillRect(sx, sy, cs, cs * 0.35);
+      c.fillStyle = getCSS('--platform-deep');
+      c.fillRect(sx, sy + cs * 0.3, cs, 3);
+    },
+
+    drawSpikes(c, sx, sy, tx, ty, cs) {
+      c.fillStyle = getCSS('--danger-deep');
+      c.fillRect(sx, sy + cs * 0.6, cs, cs * 0.4);
+      c.fillStyle = getCSS('--danger');
+      c.beginPath();
+      const spikes = 4;
+      for (let i = 0; i < spikes; i++) {
+        const x0 = sx + (i * cs) / spikes;
+        const x1 = sx + ((i + 1) * cs) / spikes;
+        c.moveTo(x0, sy + cs);
+        c.lineTo((x0 + x1) / 2, sy + cs * 0.2);
+        c.lineTo(x1, sy + cs);
+      }
+      c.fill();
+    },
+
+    drawBackground(c, w, h, world) {
+      // Sky gradient (cleanly drawn into the canvas, not relying on body bg)
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, getCSS('--sky-top'));
+      sky.addColorStop(1, getCSS('--sky-bot'));
+      c.fillStyle = sky;
+      c.fillRect(0, 0, w, h);
+      // Parallax clouds
+      c.fillStyle = 'rgba(255,255,255,0.85)';
+      const camX = world.camera.x * 0.3;
+      const ts = tileSize;
+      for (const cl of this.clouds) {
+        const x = ((cl.x - camX) * ts) % (w + 200);
+        const sx = x < -100 ? x + w + 200 : x;
+        const sy = cl.y * ts;
+        const r = 20 * cl.scale;
+        c.beginPath();
+        c.arc(sx, sy, r, 0, Math.PI * 2);
+        c.arc(sx + r, sy + 3, r * 0.8, 0, Math.PI * 2);
+        c.arc(sx - r * 0.9, sy + 4, r * 0.7, 0, Math.PI * 2);
+        c.arc(sx + r * 0.4, sy - r * 0.5, r * 0.7, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    drawGoal(c, gx, gy, cs, wave) {
+      // Pole
+      c.fillStyle = '#8B6F3F';
+      c.fillRect(gx - 2, gy - cs * 1.2, 4, cs * 1.2);
+      // Flag — waving
+      c.fillStyle = getCSS('--accent');
+      c.beginPath();
+      c.moveTo(gx, gy - cs * 1.15);
+      c.lineTo(gx + cs * 0.5 + wave, gy - cs * 1.0);
+      c.lineTo(gx, gy - cs * 0.85);
+      c.closePath();
+      c.fill();
+    },
+
+    // Collectibles: stars (A) and flowers (B). Mechanics are identical
+    // across both types and across worlds — collect on overlap, increment
+    // the shared counter, never required to win. Only the art differs.
+    collectibleA: {
+      name: 'Star',
+      draw(c, cx, cy, cs, bob) {
+        // Pulsing soft glow behind (not canvas shadowBlur — that ghosts on Safari)
+        const pulse = 0.7 + 0.3 * Math.sin(bob * 0.7);
+        const grad = c.createRadialGradient(cx, cy, 0, cx, cy, cs * 0.7);
+        grad.addColorStop(0, `rgba(255, 210, 77, ${0.5 * pulse})`);
+        grad.addColorStop(0.5, `rgba(255, 210, 77, ${0.2 * pulse})`);
+        grad.addColorStop(1, 'rgba(255, 210, 77, 0)');
+        c.fillStyle = grad;
+        c.fillRect(cx - cs, cy - cs, cs * 2, cs * 2);
+        // The star itself — drawn cleanly, no canvas shadow
+        c.font = `${cs * 0.75}px serif`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText('⭐', cx, cy);
+      }
+    },
+
+    collectibleB: {
+      name: 'Flower',
+      draw(c, cx, cy, cs, bob) {
+        // Sway gently
+        const sway = Math.sin(bob * 0.6) * 0.08;
+        const r = cs * 0.18;
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(sway);
+        // Soft pink glow behind
+        const pulse = 0.7 + 0.3 * Math.sin(bob * 0.8);
+        const grad = c.createRadialGradient(0, 0, 0, 0, 0, cs * 0.55);
+        grad.addColorStop(0, `rgba(255, 168, 200, ${0.4 * pulse})`);
+        grad.addColorStop(1, 'rgba(255, 168, 200, 0)');
+        c.fillStyle = grad;
+        c.fillRect(-cs, -cs, cs * 2, cs * 2);
+        // Five petals around the center
+        c.fillStyle = '#FF8FA3';
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+          const px = Math.cos(a) * r * 1.1;
+          const py = Math.sin(a) * r * 1.1;
+          c.beginPath();
+          c.arc(px, py, r, 0, Math.PI * 2);
+          c.fill();
+        }
+        // Yellow center
+        c.fillStyle = '#FFD24D';
+        c.beginPath();
+        c.arc(0, 0, r * 0.8, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    },
+
+    // The world's built-in enemy. Mechanics are the same across worlds
+    // (patrols a platform, bounces the player on touch — no death). Only
+    // the appearance differs. The draw function receives (c, sx, sy, cs,
+    // facing) where (sx, sy) is the feet position in screen space; facing
+    // is 1 for right-facing, -1 for left-facing.
+    enemy: {
+      name: 'Friendly Snail',
+      draw(c, sx, sy, cs, facing) {
+        c.save();
+        c.translate(sx, sy);
+        c.scale(facing, 1);
+        // Shell — earth tones, slight orange-brown
+        c.fillStyle = '#B47B3F';
+        c.beginPath();
+        c.arc(-cs * 0.05, -cs * 0.35, cs * 0.32, 0, Math.PI * 2);
+        c.fill();
+        // Shell spiral
+        c.strokeStyle = '#7C5326';
+        c.lineWidth = 2;
+        c.beginPath();
+        c.arc(-cs * 0.05, -cs * 0.35, cs * 0.18, 0, Math.PI * 2);
+        c.moveTo(-cs * 0.05 + cs * 0.1, -cs * 0.35);
+        c.arc(-cs * 0.05, -cs * 0.35, cs * 0.1, 0, Math.PI * 2);
+        c.stroke();
+        // Body — soft yellow-green
+        c.fillStyle = '#C9D466';
+        c.beginPath();
+        c.ellipse(cs * 0.05, -cs * 0.1, cs * 0.4, cs * 0.18, 0, 0, Math.PI * 2);
+        c.fill();
+        // Head bump
+        c.beginPath();
+        c.arc(cs * 0.35, -cs * 0.18, cs * 0.13, 0, Math.PI * 2);
+        c.fill();
+        // Antennae
+        c.strokeStyle = '#8A9942';
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.moveTo(cs * 0.35, -cs * 0.27);
+        c.lineTo(cs * 0.4, -cs * 0.42);
+        c.moveTo(cs * 0.32, -cs * 0.27);
+        c.lineTo(cs * 0.27, -cs * 0.42);
+        c.stroke();
+        // Antenna tips
+        c.fillStyle = '#8A9942';
+        c.beginPath();
+        c.arc(cs * 0.4, -cs * 0.42, cs * 0.04, 0, Math.PI * 2);
+        c.arc(cs * 0.27, -cs * 0.42, cs * 0.04, 0, Math.PI * 2);
+        c.fill();
+        // Eye
+        c.fillStyle = 'black';
+        c.beginPath();
+        c.arc(cs * 0.4, -cs * 0.16, cs * 0.03, 0, Math.PI * 2);
+        c.fill();
+        // Friendly smile
+        c.strokeStyle = 'black';
+        c.lineWidth = 1.2;
+        c.beginPath();
+        c.arc(cs * 0.36, -cs * 0.1, cs * 0.05, 0, Math.PI);
+        c.stroke();
+        c.restore();
+      }
+    }
+  },
+
+  // ----- Rainbow Castle ---------------------------------------------
+  // Ported from the Ella prototype. Same engine, same physics, different
+  // paint: stone bricks instead of grass, a pink rainbow sky, carpet
+  // banners for platforms, a turret with a sparkly flag at the goal,
+  // rainbows as collectibles. Spikes stay generic red for v1 (per brief).
+  castle: {
+    id: 'castle',
+    name: 'Rainbow Castle',
+    emoji: '🏰',
+    palette: {
+      '--sky-top':       '#FFC9E5',
+      '--sky-bot':       '#FFE5D0',
+      // Stone bricks in lavender — we reuse the --ground/--platform names
+      // so engine code doesn't need to know which world it's in.
+      '--ground':        '#B8A8C9',  // stone (mid)
+      '--ground-deep':   '#8068A0',  // stone-deep / brick seams
+      '--ground-top':    '#D4C5E0',  // stone-top
+      '--platform':      '#E8C5DE',  // pink banner carpet
+      '--platform-deep': '#B485A8'   // banner deep / tassel
+    },
+
+    // The castle's atmosphere is a rainbow arc, not clouds. We keep a
+    // shimmer accumulator on the world (added below in loadLevelDef
+    // path via world.flagWave being already there; rainbow arc is static).
+    drawGround(c, sx, sy, tx, ty, cs) {
+      // Castle stone — purple/lavender bricks
+      c.fillStyle = getCSS('--ground');
+      c.fillRect(sx, sy + cs * 0.2, cs, cs * 0.8);
+      c.fillStyle = getCSS('--ground-top');
+      c.fillRect(sx, sy, cs, cs * 0.25);
+      // Brick lines
+      c.strokeStyle = getCSS('--ground-deep');
+      c.lineWidth = 1.5;
+      c.beginPath();
+      // Horizontal seam
+      c.moveTo(sx, sy + cs * 0.55);
+      c.lineTo(sx + cs, sy + cs * 0.55);
+      // Vertical seams — staggered so courses look bricky, not gridded
+      const stagger = ((tx || 0) + (ty || 0)) % 2 === 0;
+      if (stagger) {
+        c.moveTo(sx + cs * 0.5,  sy + cs * 0.2);
+        c.lineTo(sx + cs * 0.5,  sy + cs * 0.55);
+        c.moveTo(sx + cs * 0.25, sy + cs * 0.55);
+        c.lineTo(sx + cs * 0.25, sy + cs);
+        c.moveTo(sx + cs * 0.75, sy + cs * 0.55);
+        c.lineTo(sx + cs * 0.75, sy + cs);
+      } else {
+        c.moveTo(sx + cs * 0.25, sy + cs * 0.2);
+        c.lineTo(sx + cs * 0.25, sy + cs * 0.55);
+        c.moveTo(sx + cs * 0.75, sy + cs * 0.2);
+        c.lineTo(sx + cs * 0.75, sy + cs * 0.55);
+        c.moveTo(sx + cs * 0.5,  sy + cs * 0.55);
+        c.lineTo(sx + cs * 0.5,  sy + cs);
+      }
+      c.stroke();
+      // Sparkle dots — castle is sparkly!
+      const seed = ((tx || 0) * 31 + (ty || 0) * 17) % 7;
+      if (seed < 3) {
+        c.fillStyle = 'rgba(255, 220, 100, 0.6)';
+        c.fillRect(sx + 4 + seed * 6, sy + 8, 2, 2);
+      }
+    },
+
+    drawDirt(c, sx, sy, tx, ty, cs) {
+      // Deeper foundation stone
+      c.fillStyle = getCSS('--ground-deep');
+      c.fillRect(sx, sy, cs, cs);
+      c.fillStyle = 'rgba(0,0,0,0.12)';
+      const seed = ((tx || 0) * 31 + (ty || 0) * 17) % 7;
+      c.fillRect(sx + 4 + seed, sy + 8, 4, 4);
+      c.fillRect(sx + cs - 12 - seed, sy + cs - 14, 3, 3);
+    },
+
+    drawPlatform(c, sx, sy, tx, ty, cs) {
+      // Castle carpet/banner platform — pink with tassel details
+      c.fillStyle = getCSS('--platform');
+      c.fillRect(sx, sy, cs, cs * 0.4);
+      c.fillStyle = getCSS('--platform-deep');
+      c.fillRect(sx, sy + cs * 0.35, cs, 3);
+      // Tassel detail at edges
+      c.fillRect(sx, sy, 2, cs * 0.4);
+      c.fillRect(sx + cs - 2, sy, 2, cs * 0.4);
+    },
+
+    drawSpikes(c, sx, sy, tx, ty, cs) {
+      // Castle keeps red spikes for v1 — to be restyled in v2.
+      c.fillStyle = getCSS('--danger-deep');
+      c.fillRect(sx, sy + cs * 0.6, cs, cs * 0.4);
+      c.fillStyle = getCSS('--danger');
+      c.beginPath();
+      const spikes = 4;
+      for (let i = 0; i < spikes; i++) {
+        const x0 = sx + (i * cs) / spikes;
+        const x1 = sx + ((i + 1) * cs) / spikes;
+        c.moveTo(x0, sy + cs);
+        c.lineTo((x0 + x1) / 2, sy + cs * 0.2);
+        c.lineTo(x1, sy + cs);
+      }
+      c.fill();
+    },
+
+    drawBackground(c, w, h, world) {
+      // Sky gradient — pink to peach
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, getCSS('--sky-top'));
+      sky.addColorStop(1, getCSS('--sky-bot'));
+      c.fillStyle = sky;
+      c.fillRect(0, 0, w, h);
+      // Rainbow arc behind everything, parallaxed gently
+      const camX = world.camera.x * 0.2;
+      const cx = w / 2 - camX * tileSize;
+      const cy = h * 0.85;
+      const radius = h * 0.7;
+      const colors = ['#FF8FA3', '#FFA34D', '#FFD24D', '#7DD46C', '#5DBEF0', '#A87DF0'];
+      c.lineCap = 'butt';
+      for (let i = 0; i < colors.length; i++) {
+        c.strokeStyle = colors[i];
+        c.globalAlpha = 0.18;
+        c.lineWidth = 14;
+        c.beginPath();
+        c.arc(cx, cy, radius - i * 14, Math.PI * 1.05, Math.PI * 1.95);
+        c.stroke();
+      }
+      c.globalAlpha = 1;
+    },
+
+    drawGoal(c, gx, gy, cs, wave) {
+      // Castle tower top — a little turret with battlements and a flag
+      c.fillStyle = getCSS('--ground');
+      c.fillRect(gx - cs * 0.35, gy - cs * 0.9, cs * 0.7, cs * 0.9);
+      // Battlements
+      c.fillStyle = getCSS('--ground-deep');
+      for (let i = 0; i < 3; i++) {
+        c.fillRect(gx - cs * 0.35 + i * cs * 0.25, gy - cs * 1.0, cs * 0.15, cs * 0.15);
+      }
+      // Flag pole
+      c.fillStyle = '#8B6F3F';
+      c.fillRect(gx - 2, gy - cs * 1.7, 4, cs * 0.7);
+      // Flag — waving, pink with sparkle
+      c.fillStyle = getCSS('--accent');
+      c.beginPath();
+      c.moveTo(gx, gy - cs * 1.65);
+      c.lineTo(gx + cs * 0.5 + wave, gy - cs * 1.45);
+      c.lineTo(gx, gy - cs * 1.25);
+      c.closePath();
+      c.fill();
+      // Sparkle on flag
+      c.fillStyle = '#FFD24D';
+      c.font = `${cs * 0.25}px serif`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText('✨', gx + cs * 0.25 + wave * 0.5, gy - cs * 1.45);
+    },
+
+    // Castle's collectibleA is a rainbow arc. Mechanics unchanged from
+    // meadow's star: collect on overlap, increment counter, never required.
+    // The engine treats both the same — only the draw function differs.
+    collectibleA: {
+      name: 'Rainbow',
+      draw(c, cx, cy, cs, bob) {
+        const size = cs * 0.45;
+        const colors = ['#FF6B6B', '#FFA34D', '#FFD24D', '#7DD46C', '#5DBEF0', '#A87DF0'];
+        // Glow behind
+        const pulse = 0.7 + 0.3 * Math.sin(bob * 1.5);
+        const grad = c.createRadialGradient(cx, cy, 0, cx, cy, size * 1.8);
+        grad.addColorStop(0, `rgba(255, 210, 240, ${0.5 * pulse})`);
+        grad.addColorStop(1, 'rgba(255, 210, 240, 0)');
+        c.fillStyle = grad;
+        c.fillRect(cx - size * 2, cy - size * 2, size * 4, size * 4);
+        // Rainbow arc. Per-band step is proportional to `size` (not a
+        // literal pixel step) and we break if a radius reaches zero —
+        // otherwise small `cs` values (e.g. the 32px palette previews)
+        // would push inner radii negative, and canvas.arc throws on
+        // negative radii, aborting whatever caller is rendering us.
+        const step = size * 0.13;
+        c.lineCap = 'round';
+        c.lineWidth = Math.max(1.5, cs * 0.06);
+        for (let i = 0; i < colors.length; i++) {
+          const r = size - i * step;
+          if (r <= 0) break;
+          c.strokeStyle = colors[i];
+          c.beginPath();
+          c.arc(cx, cy + size * 0.3, r, Math.PI, 0);
+          c.stroke();
+        }
+      }
+    },
+
+    collectibleB: {
+      name: 'Gem',
+      draw(c, cx, cy, cs, bob) {
+        // Purple gem with a soft glow and a faceted look. Twinkles slowly.
+        const twinkle = 0.7 + 0.3 * Math.sin(bob * 1.2);
+        const r = cs * 0.28;
+        // Purple glow
+        const grad = c.createRadialGradient(cx, cy, 0, cx, cy, cs * 0.7);
+        grad.addColorStop(0, `rgba(200, 130, 240, ${0.5 * twinkle})`);
+        grad.addColorStop(1, 'rgba(200, 130, 240, 0)');
+        c.fillStyle = grad;
+        c.fillRect(cx - cs, cy - cs, cs * 2, cs * 2);
+        // Gem shape — a hexagonal cut viewed from the front
+        c.save();
+        c.translate(cx, cy);
+        // Main body (deep purple)
+        c.fillStyle = '#A87DF0';
+        c.beginPath();
+        c.moveTo(0, -r);
+        c.lineTo(r * 0.9, -r * 0.4);
+        c.lineTo(r * 0.7, r * 0.8);
+        c.lineTo(-r * 0.7, r * 0.8);
+        c.lineTo(-r * 0.9, -r * 0.4);
+        c.closePath();
+        c.fill();
+        // Top facet highlight (lighter)
+        c.fillStyle = '#D188FF';
+        c.beginPath();
+        c.moveTo(0, -r);
+        c.lineTo(r * 0.9, -r * 0.4);
+        c.lineTo(0, -r * 0.2);
+        c.lineTo(-r * 0.9, -r * 0.4);
+        c.closePath();
+        c.fill();
+        // Tiny twinkle on the top facet
+        c.fillStyle = `rgba(255, 255, 255, ${0.7 * twinkle})`;
+        c.beginPath();
+        c.arc(-r * 0.25, -r * 0.55, r * 0.12, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    },
+
+    // Castle's enemy: a grumpy grey wolf. Ported from the Ella prototype.
+    // Bounces the player gently on touch (handled by the engine, identical
+    // to the snail). Drawn at (sx, sy) = feet position; body and head extend
+    // above. `facing` is 1 or -1 (right/left).
+    enemy: {
+      name: 'Grumpy Wolf',
+      draw(c, sx, sy, cs, facing) {
+        c.save();
+        c.translate(sx, sy);
+        c.scale(facing, 1);
+        // Body (oval)
+        c.fillStyle = '#6B6B7D';
+        c.beginPath();
+        c.ellipse(0, -cs * 0.4, cs * 0.5, cs * 0.32, 0, 0, Math.PI * 2);
+        c.fill();
+        // Head (circle)
+        c.beginPath();
+        c.arc(cs * 0.35, -cs * 0.55, cs * 0.28, 0, Math.PI * 2);
+        c.fill();
+        // Ear (triangle)
+        c.fillStyle = '#444455';
+        c.beginPath();
+        c.moveTo(cs * 0.45, -cs * 0.85);
+        c.lineTo(cs * 0.55, -cs * 0.7);
+        c.lineTo(cs * 0.4, -cs * 0.65);
+        c.closePath();
+        c.fill();
+        // Tail
+        c.fillStyle = '#6B6B7D';
+        c.beginPath();
+        c.ellipse(-cs * 0.5, -cs * 0.45, cs * 0.18, cs * 0.1, -0.3, 0, Math.PI * 2);
+        c.fill();
+        // Legs
+        c.fillStyle = '#444455';
+        c.fillRect(-cs * 0.35, -cs * 0.15, cs * 0.12, cs * 0.18);
+        c.fillRect(-cs * 0.1,  -cs * 0.15, cs * 0.12, cs * 0.18);
+        c.fillRect( cs * 0.15, -cs * 0.15, cs * 0.12, cs * 0.18);
+        c.fillRect( cs * 0.35, -cs * 0.15, cs * 0.12, cs * 0.18);
+        // Eye
+        c.fillStyle = 'white';
+        c.beginPath();
+        c.arc(cs * 0.45, -cs * 0.6, cs * 0.06, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'black';
+        c.beginPath();
+        c.arc(cs * 0.47, -cs * 0.6, cs * 0.03, 0, Math.PI * 2);
+        c.fill();
+        // Snout
+        c.fillStyle = '#444455';
+        c.beginPath();
+        c.ellipse(cs * 0.55, -cs * 0.5, cs * 0.08, cs * 0.05, 0, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    }
+  },
+
+  // =========================================================
+  // ENCHANTED FOREST — dappled woodland at golden hour, mossy
+  // stones, mushroom platforms, fireflies as collectibles.
+  // =========================================================
+  forest: {
+    id: 'forest',
+    name: 'Enchanted Forest',
+    emoji: '🌲',
+    palette: {
+      '--sky-top':       '#9BC8B0',   // soft teal canopy
+      '--sky-bot':       '#F5C896',   // dusty golden hour
+      '--ground':        '#4A7C2E',   // mossy green
+      '--ground-deep':   '#2D5519',   // shadow under leaves
+      '--ground-top':    '#86C152',   // bright lime top stripe
+      '--platform':      '#D89B6E',   // warm mushroom cap
+      '--platform-deep': '#A66B3F'    // mushroom underside
+    },
+
+    // Floating particles — fireflies that drift through the scene.
+    // Live with the world so each world can have its own atmosphere.
+    fireflies: Array.from({ length: 12 }, () => ({
+      x: Math.random() * 30,
+      y: 2 + Math.random() * 6,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.15 + Math.random() * 0.25
+    })),
+
+    drawGround(c, sx, sy, tx, ty, cs) {
+      // Moss top, soil below
+      c.fillStyle = getCSS('--ground');
+      c.fillRect(sx, sy + cs * 0.2, cs, cs * 0.8);
+      c.fillStyle = getCSS('--ground-top');
+      c.fillRect(sx, sy, cs, cs * 0.25);
+      // Moss tufts on top edge — clumpier than meadow's grass
+      c.fillStyle = getCSS('--ground-deep');
+      for (let i = 0; i < 3; i++) {
+        const gx = sx + cs * (0.15 + i * 0.3);
+        c.beginPath();
+        c.arc(gx + cs * 0.05, sy + cs * 0.08, cs * 0.06, 0, Math.PI * 2);
+        c.fill();
+      }
+      // Tiny mushroom on some tiles (deterministic from tx for stability)
+      if ((tx * 7 + ty * 3) % 5 === 0) {
+        const mx = sx + cs * 0.7;
+        const my = sy + cs * 0.05;
+        c.fillStyle = '#E96B6B';
+        c.beginPath();
+        c.arc(mx, my, cs * 0.08, Math.PI, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#F5F2E8';
+        c.fillRect(mx - cs * 0.025, my, cs * 0.05, cs * 0.06);
+      }
+    },
+
+    drawDirt(c, sx, sy, tx, ty, cs) {
+      // Earthy forest soil with little roots
+      c.fillStyle = getCSS('--ground-deep');
+      c.fillRect(sx, sy, cs, cs);
+      // Root squiggles
+      c.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+      c.lineWidth = Math.max(1, cs * 0.04);
+      const seed = (tx * 31 + ty * 17) % 4;
+      c.beginPath();
+      c.moveTo(sx + cs * 0.15, sy + cs * 0.3 + seed);
+      c.quadraticCurveTo(sx + cs * 0.5, sy + cs * 0.5, sx + cs * 0.85, sy + cs * 0.35 + seed);
+      c.stroke();
+      // Pebbles
+      c.fillStyle = 'rgba(0, 0, 0, 0.12)';
+      c.fillRect(sx + 4 + seed, sy + cs - 8, 3, 3);
+      c.fillRect(sx + cs - 10 - seed, sy + cs - 12, 2, 2);
+    },
+
+    drawPlatform(c, sx, sy, tx, ty, cs) {
+      // Mushroom-cap platform: red top with white spots, light underside
+      c.fillStyle = '#E96B6B';
+      c.fillRect(sx, sy, cs, cs * 0.3);
+      // Cream underside band
+      c.fillStyle = '#F5F2E8';
+      c.fillRect(sx, sy + cs * 0.3, cs, 3);
+      // White spots on the cap
+      c.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      const seed = (tx * 41) % 3;
+      c.beginPath();
+      c.arc(sx + cs * 0.3, sy + cs * 0.13, cs * 0.06, 0, Math.PI * 2);
+      c.arc(sx + cs * 0.65, sy + cs * 0.18 + seed, cs * 0.05, 0, Math.PI * 2);
+      c.fill();
+    },
+
+    drawSpikes(c, sx, sy, tx, ty, cs) {
+      // Thorny vines — same shape as classic spikes but in forest green
+      c.fillStyle = '#2D5519';
+      c.fillRect(sx, sy + cs * 0.6, cs, cs * 0.4);
+      c.fillStyle = '#5B8C3E';
+      c.beginPath();
+      const spikes = 4;
+      for (let i = 0; i < spikes; i++) {
+        const x0 = sx + (i * cs) / spikes;
+        const x1 = sx + ((i + 1) * cs) / spikes;
+        c.moveTo(x0, sy + cs);
+        c.lineTo((x0 + x1) / 2, sy + cs * 0.2);
+        c.lineTo(x1, sy + cs);
+      }
+      c.fill();
+    },
+
+    drawBackground(c, w, h, world) {
+      // Sky gradient
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, getCSS('--sky-top'));
+      sky.addColorStop(1, getCSS('--sky-bot'));
+      c.fillStyle = sky;
+      c.fillRect(0, 0, w, h);
+      // Dappled tree-canopy bands at the top — alternating darker green
+      // stripes suggesting layers of leaves overhead.
+      c.fillStyle = 'rgba(60, 110, 50, 0.25)';
+      for (let i = 0; i < 3; i++) {
+        const y = i * h * 0.08;
+        c.fillRect(0, y, w, h * 0.05);
+      }
+      // Fireflies — pulsing dots drifting slowly. Time-based animation
+      // via performance.now() since drawBackground doesn't receive dt.
+      const t = performance.now() / 1000;
+      const ts = tileSize;
+      const camX = world.camera.x * 0.4;
+      for (const f of this.fireflies) {
+        const baseX = ((f.x + t * f.speed - camX) * ts) % (w + 60);
+        const fx = baseX < -30 ? baseX + w + 60 : baseX;
+        const fy = f.y * ts + Math.sin(t * 1.5 + f.phase) * 8;
+        const glow = 0.5 + 0.5 * Math.sin(t * 3 + f.phase);
+        // Glow halo
+        const grad = c.createRadialGradient(fx, fy, 0, fx, fy, ts * 0.4);
+        grad.addColorStop(0, `rgba(255, 245, 150, ${0.5 * glow})`);
+        grad.addColorStop(1, 'rgba(255, 245, 150, 0)');
+        c.fillStyle = grad;
+        c.fillRect(fx - ts * 0.4, fy - ts * 0.4, ts * 0.8, ts * 0.8);
+        // Bright core
+        c.fillStyle = `rgba(255, 250, 200, ${0.7 + 0.3 * glow})`;
+        c.beginPath();
+        c.arc(fx, fy, Math.max(1.5, ts * 0.04), 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    drawGoal(c, gx, gy, cs, wave) {
+      // A glowing lantern on a hooked branch.
+      // Hook (branch)
+      c.strokeStyle = '#5B3F22';
+      c.lineWidth = Math.max(2, cs * 0.07);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(gx - 2, gy);
+      c.lineTo(gx - 2, gy - cs * 1.3);
+      c.quadraticCurveTo(gx - 2, gy - cs * 1.5, gx + cs * 0.2, gy - cs * 1.5);
+      c.stroke();
+      // Hanging string
+      c.strokeStyle = '#3A2A18';
+      c.lineWidth = 1.5;
+      c.beginPath();
+      const lx = gx + cs * 0.2 + Math.sin(wave * 0.1) * 2;
+      c.moveTo(gx + cs * 0.2, gy - cs * 1.5);
+      c.lineTo(lx, gy - cs * 1.1);
+      c.stroke();
+      // Lantern body — warm glow
+      const glow = 0.7 + 0.3 * Math.sin(wave * 0.15);
+      const grad = c.createRadialGradient(lx, gy - cs * 0.9, 0, lx, gy - cs * 0.9, cs * 0.6);
+      grad.addColorStop(0, `rgba(255, 220, 130, ${0.7 * glow})`);
+      grad.addColorStop(1, 'rgba(255, 220, 130, 0)');
+      c.fillStyle = grad;
+      c.fillRect(lx - cs * 0.6, gy - cs * 1.5, cs * 1.2, cs * 1.2);
+      // Lantern frame
+      c.fillStyle = '#3A2A18';
+      c.fillRect(lx - cs * 0.18, gy - cs * 1.1, cs * 0.36, cs * 0.4);
+      // Lantern glass — bright yellow
+      c.fillStyle = `rgba(255, 230, 130, ${0.95})`;
+      c.fillRect(lx - cs * 0.13, gy - cs * 1.05, cs * 0.26, cs * 0.3);
+    },
+
+    collectibleA: {
+      name: 'Firefly',
+      draw(c, cx, cy, cs, bob) {
+        // A brighter, more concentrated firefly than the background ones.
+        const pulse = 0.6 + 0.4 * Math.sin(bob * 1.4);
+        // Outer halo
+        const outer = c.createRadialGradient(cx, cy, 0, cx, cy, cs * 0.6);
+        outer.addColorStop(0, `rgba(255, 245, 150, ${0.55 * pulse})`);
+        outer.addColorStop(0.6, `rgba(255, 230, 100, ${0.25 * pulse})`);
+        outer.addColorStop(1, 'rgba(255, 230, 100, 0)');
+        c.fillStyle = outer;
+        c.fillRect(cx - cs, cy - cs, cs * 2, cs * 2);
+        // Bright core
+        c.fillStyle = `rgba(255, 250, 220, ${0.85 + 0.15 * pulse})`;
+        c.beginPath();
+        c.arc(cx, cy, cs * 0.12, 0, Math.PI * 2);
+        c.fill();
+        // Yellow center
+        c.fillStyle = '#FFD24D';
+        c.beginPath();
+        c.arc(cx, cy, cs * 0.07, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    collectibleB: {
+      name: 'Acorn',
+      draw(c, cx, cy, cs, bob) {
+        // A magic acorn that wobbles gently. Brown cap, warm beige nut,
+        // tiny green sparkle on top.
+        const sway = Math.sin(bob * 0.7) * 0.08;
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(sway);
+        // Soft golden glow behind
+        const pulse = 0.7 + 0.3 * Math.sin(bob * 0.9);
+        const grad = c.createRadialGradient(0, 0, 0, 0, 0, cs * 0.5);
+        grad.addColorStop(0, `rgba(220, 180, 120, ${0.4 * pulse})`);
+        grad.addColorStop(1, 'rgba(220, 180, 120, 0)');
+        c.fillStyle = grad;
+        c.fillRect(-cs, -cs, cs * 2, cs * 2);
+        // Nut body — warm beige oval, pointed at the bottom
+        c.fillStyle = '#C99966';
+        c.beginPath();
+        c.moveTo(0, cs * 0.28);
+        c.quadraticCurveTo(cs * 0.22, cs * 0.15, cs * 0.22, -cs * 0.05);
+        c.quadraticCurveTo(cs * 0.22, -cs * 0.15, 0, -cs * 0.15);
+        c.quadraticCurveTo(-cs * 0.22, -cs * 0.15, -cs * 0.22, -cs * 0.05);
+        c.quadraticCurveTo(-cs * 0.22, cs * 0.15, 0, cs * 0.28);
+        c.fill();
+        // Cap — darker brown rounded top
+        c.fillStyle = '#6B4A28';
+        c.beginPath();
+        c.arc(0, -cs * 0.08, cs * 0.24, Math.PI, 0);
+        c.fill();
+        // Cap texture (cross-hatch suggested with a few dots)
+        c.fillStyle = '#4A3018';
+        c.beginPath();
+        c.arc(-cs * 0.08, -cs * 0.12, cs * 0.02, 0, Math.PI * 2);
+        c.arc(cs * 0.08, -cs * 0.18, cs * 0.02, 0, Math.PI * 2);
+        c.arc(0, -cs * 0.22, cs * 0.02, 0, Math.PI * 2);
+        c.fill();
+        // Tiny stem
+        c.strokeStyle = '#4A3018';
+        c.lineWidth = Math.max(1, cs * 0.025);
+        c.beginPath();
+        c.moveTo(0, -cs * 0.3);
+        c.lineTo(cs * 0.04, -cs * 0.38);
+        c.stroke();
+        // Green sparkle on top — the "magic" part
+        c.fillStyle = `rgba(150, 230, 120, ${0.7 * pulse})`;
+        c.beginPath();
+        c.arc(-cs * 0.05, -cs * 0.4, cs * 0.04, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    },
+
+    // Enemy: a wide-eyed friendly spider that scuttles back and forth.
+    enemy: {
+      name: 'Friendly Spider',
+      draw(c, sx, sy, cs, facing) {
+        c.save();
+        c.translate(sx, sy);
+        c.scale(facing, 1);
+        // Body — dark purple-brown oval, low to the ground
+        c.fillStyle = '#5B3050';
+        c.beginPath();
+        c.ellipse(0, -cs * 0.25, cs * 0.32, cs * 0.22, 0, 0, Math.PI * 2);
+        c.fill();
+        // Legs — 4 lines sweeping out and down (8 in reality but stylized)
+        c.strokeStyle = '#3A1F33';
+        c.lineWidth = Math.max(1.5, cs * 0.05);
+        c.lineCap = 'round';
+        const legPhase = Math.sin(performance.now() / 200) * 0.1;
+        for (let i = 0; i < 4; i++) {
+          const t = (i / 3) - 0.5;
+          const startX = t * cs * 0.5;
+          const angle = legPhase + (i - 1.5) * 0.15;
+          c.beginPath();
+          c.moveTo(startX, -cs * 0.25);
+          c.quadraticCurveTo(startX + cs * 0.25 * angle, -cs * 0.1,
+                             startX + cs * 0.3, cs * 0.05);
+          c.stroke();
+        }
+        // Friendly googly eyes
+        c.fillStyle = 'white';
+        c.beginPath();
+        c.arc(-cs * 0.08, -cs * 0.32, cs * 0.07, 0, Math.PI * 2);
+        c.arc(cs * 0.08, -cs * 0.32, cs * 0.07, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'black';
+        c.beginPath();
+        c.arc(-cs * 0.08, -cs * 0.32, cs * 0.035, 0, Math.PI * 2);
+        c.arc(cs * 0.08, -cs * 0.32, cs * 0.035, 0, Math.PI * 2);
+        c.fill();
+        // Tiny smile
+        c.strokeStyle = 'black';
+        c.lineWidth = Math.max(1, cs * 0.02);
+        c.beginPath();
+        c.arc(0, -cs * 0.22, cs * 0.06, 0.2, Math.PI - 0.2);
+        c.stroke();
+        c.restore();
+      }
+    }
+  },
+
+  // =========================================================
+  // MERMAID LAGOON — sunlit shallow water, coral platforms,
+  // sandy seabed, drifting bubbles, pearls and seashells.
+  // =========================================================
+  lagoon: {
+    id: 'lagoon',
+    name: 'Mermaid Lagoon',
+    emoji: '🐚',
+    palette: {
+      '--sky-top':       '#7FCFD9',   // sunlit shallow water
+      '--sky-bot':       '#FFE6B0',   // sandy gold near the bottom
+      '--ground':        '#E8B070',   // coral sand
+      '--ground-deep':   '#B07840',   // deeper sand / shadow
+      '--ground-top':    '#F5D4A0',   // pale shell-sand top
+      '--platform':      '#F09EB0',   // soft coral pink
+      '--platform-deep': '#C8607A'    // deep coral
+    },
+
+    // Bubbles drifting upward through the water.
+    bubbles: Array.from({ length: 10 }, () => ({
+      x: Math.random() * 30,
+      yBase: Math.random() * 10,
+      speed: 0.2 + Math.random() * 0.4,
+      size: 0.3 + Math.random() * 0.5,
+      phase: Math.random() * Math.PI * 2
+    })),
+
+    drawGround(c, sx, sy, tx, ty, cs) {
+      // Sandy top with pale-shell stripe, deeper sand below
+      c.fillStyle = getCSS('--ground');
+      c.fillRect(sx, sy + cs * 0.2, cs, cs * 0.8);
+      c.fillStyle = getCSS('--ground-top');
+      c.fillRect(sx, sy, cs, cs * 0.25);
+      // Tiny shell flecks on top — pale dots
+      c.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      const seed = (tx * 19 + ty * 7) % 5;
+      c.beginPath();
+      c.arc(sx + cs * 0.2, sy + cs * 0.12, 1.5, 0, Math.PI * 2);
+      c.arc(sx + cs * 0.55 + seed, sy + cs * 0.08, 1, 0, Math.PI * 2);
+      c.arc(sx + cs * 0.85, sy + cs * 0.15, 1.5, 0, Math.PI * 2);
+      c.fill();
+    },
+
+    drawDirt(c, sx, sy, tx, ty, cs) {
+      // Wet sand — slightly mottled, with the occasional pebble or shell.
+      c.fillStyle = getCSS('--ground-deep');
+      c.fillRect(sx, sy, cs, cs);
+      // Subtle wave texture
+      c.fillStyle = 'rgba(255, 255, 255, 0.08)';
+      const seed = (tx * 23 + ty * 11) % 5;
+      c.beginPath();
+      c.moveTo(sx, sy + cs * 0.3 + seed);
+      c.quadraticCurveTo(sx + cs * 0.5, sy + cs * 0.4, sx + cs, sy + cs * 0.3 + seed);
+      c.lineTo(sx + cs, sy + cs * 0.4 + seed);
+      c.quadraticCurveTo(sx + cs * 0.5, sy + cs * 0.5, sx, sy + cs * 0.4 + seed);
+      c.fill();
+      // Tiny coral fleck
+      c.fillStyle = 'rgba(240, 158, 176, 0.5)';
+      c.fillRect(sx + cs * 0.7, sy + cs * 0.65, 3, 2);
+    },
+
+    drawPlatform(c, sx, sy, tx, ty, cs) {
+      // Coral platform — pink top, deeper coral under-band
+      c.fillStyle = getCSS('--platform');
+      c.fillRect(sx, sy, cs, cs * 0.35);
+      c.fillStyle = getCSS('--platform-deep');
+      c.fillRect(sx, sy + cs * 0.3, cs, 3);
+      // Coral bumps on top
+      c.fillStyle = '#FFC8D8';
+      c.beginPath();
+      c.arc(sx + cs * 0.25, sy + cs * 0.08, cs * 0.05, 0, Math.PI * 2);
+      c.arc(sx + cs * 0.6, sy + cs * 0.05, cs * 0.04, 0, Math.PI * 2);
+      c.fill();
+    },
+
+    drawSpikes(c, sx, sy, tx, ty, cs) {
+      // Sea-urchin spines — pointing up, deep purple
+      c.fillStyle = '#4A2050';
+      c.fillRect(sx, sy + cs * 0.6, cs, cs * 0.4);
+      c.fillStyle = '#7530A0';
+      c.beginPath();
+      const spikes = 4;
+      for (let i = 0; i < spikes; i++) {
+        const x0 = sx + (i * cs) / spikes;
+        const x1 = sx + ((i + 1) * cs) / spikes;
+        c.moveTo(x0, sy + cs);
+        c.lineTo((x0 + x1) / 2, sy + cs * 0.2);
+        c.lineTo(x1, sy + cs);
+      }
+      c.fill();
+    },
+
+    drawBackground(c, w, h, world) {
+      // Water gradient
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, getCSS('--sky-top'));
+      sky.addColorStop(1, getCSS('--sky-bot'));
+      c.fillStyle = sky;
+      c.fillRect(0, 0, w, h);
+      // Light shafts coming from above — diagonal bands of brighter water
+      c.fillStyle = 'rgba(255, 255, 255, 0.07)';
+      for (let i = 0; i < 3; i++) {
+        const x = (i + 0.5) * w * 0.3;
+        c.beginPath();
+        c.moveTo(x, 0);
+        c.lineTo(x + 40, 0);
+        c.lineTo(x + 100, h);
+        c.lineTo(x + 60, h);
+        c.closePath();
+        c.fill();
+      }
+      // Bubbles rising — animated by time, drift upward and loop.
+      const t = performance.now() / 1000;
+      const ts = tileSize;
+      const camX = world.camera.x * 0.2;
+      for (const b of this.bubbles) {
+        // Vertical position loops over h+padding
+        const bx = ((b.x - camX) * ts + Math.sin(t * 0.8 + b.phase) * 6) % (w + 40);
+        const sx = bx < -20 ? bx + w + 40 : bx;
+        const sy = h - ((t * b.speed * ts + b.yBase * ts) % (h + 60));
+        const r = b.size * ts * 0.25;
+        // Bubble outline + highlight
+        c.fillStyle = 'rgba(255, 255, 255, 0.25)';
+        c.beginPath();
+        c.arc(sx, sy, r, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        c.beginPath();
+        c.arc(sx - r * 0.3, sy - r * 0.3, r * 0.3, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    drawGoal(c, gx, gy, cs, wave) {
+      // A coral arch with a sparkling pearl hung at the top.
+      c.strokeStyle = '#C8607A';
+      c.lineWidth = Math.max(3, cs * 0.12);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(gx - cs * 0.3, gy);
+      c.quadraticCurveTo(gx, gy - cs * 1.6, gx + cs * 0.3, gy);
+      c.stroke();
+      // Pearl hanging from the apex
+      const px = gx + Math.sin(wave * 0.15) * 2;
+      const py = gy - cs * 1.35;
+      // Pearl glow
+      const glow = 0.7 + 0.3 * Math.sin(wave * 0.2);
+      const grad = c.createRadialGradient(px, py, 0, px, py, cs * 0.4);
+      grad.addColorStop(0, `rgba(255, 240, 250, ${0.6 * glow})`);
+      grad.addColorStop(1, 'rgba(255, 240, 250, 0)');
+      c.fillStyle = grad;
+      c.fillRect(px - cs * 0.4, py - cs * 0.4, cs * 0.8, cs * 0.8);
+      // Pearl body
+      c.fillStyle = '#FFF5F0';
+      c.beginPath();
+      c.arc(px, py, cs * 0.18, 0, Math.PI * 2);
+      c.fill();
+      // Pearl highlight
+      c.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      c.beginPath();
+      c.arc(px - cs * 0.06, py - cs * 0.07, cs * 0.05, 0, Math.PI * 2);
+      c.fill();
+    },
+
+    collectibleA: {
+      name: 'Pearl',
+      draw(c, cx, cy, cs, bob) {
+        // A pearl — soft pink-white sphere with a bright highlight.
+        const pulse = 0.7 + 0.3 * Math.sin(bob * 0.9);
+        const r = cs * 0.22;
+        // Soft glow
+        const grad = c.createRadialGradient(cx, cy, 0, cx, cy, cs * 0.55);
+        grad.addColorStop(0, `rgba(255, 220, 230, ${0.5 * pulse})`);
+        grad.addColorStop(1, 'rgba(255, 220, 230, 0)');
+        c.fillStyle = grad;
+        c.fillRect(cx - cs, cy - cs, cs * 2, cs * 2);
+        // Pearl body — slightly pink-tinted off-white
+        const body = c.createRadialGradient(
+          cx - r * 0.3, cy - r * 0.3, 0,
+          cx, cy, r
+        );
+        body.addColorStop(0, '#FFFFFF');
+        body.addColorStop(0.6, '#FFEEEE');
+        body.addColorStop(1, '#F0C8D0');
+        c.fillStyle = body;
+        c.beginPath();
+        c.arc(cx, cy, r, 0, Math.PI * 2);
+        c.fill();
+        // Bright highlight
+        c.fillStyle = `rgba(255, 255, 255, ${0.85 * pulse})`;
+        c.beginPath();
+        c.arc(cx - r * 0.35, cy - r * 0.35, r * 0.22, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    collectibleB: {
+      name: 'Seashell',
+      draw(c, cx, cy, cs, bob) {
+        // A scalloped seashell — three ribbed segments fanning upward.
+        const sway = Math.sin(bob * 0.5) * 0.06;
+        const r = cs * 0.28;
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(sway);
+        // Soft coral glow
+        const pulse = 0.7 + 0.3 * Math.sin(bob * 0.8);
+        const grad = c.createRadialGradient(0, 0, 0, 0, 0, cs * 0.55);
+        grad.addColorStop(0, `rgba(255, 180, 200, ${0.4 * pulse})`);
+        grad.addColorStop(1, 'rgba(255, 180, 200, 0)');
+        c.fillStyle = grad;
+        c.fillRect(-cs, -cs, cs * 2, cs * 2);
+        // Main fan — coral pink semicircle
+        c.fillStyle = '#FFB5C5';
+        c.beginPath();
+        c.arc(0, cs * 0.15, r, Math.PI, 0);
+        c.lineTo(0, cs * 0.15);
+        c.closePath();
+        c.fill();
+        // Three ribs — darker pink lines from base to edge
+        c.strokeStyle = '#E07B95';
+        c.lineWidth = Math.max(1, cs * 0.04);
+        c.lineCap = 'round';
+        for (let i = -1; i <= 1; i++) {
+          const a = -Math.PI / 2 + i * 0.55;
+          c.beginPath();
+          c.moveTo(0, cs * 0.12);
+          c.lineTo(Math.cos(a) * r * 0.95, cs * 0.12 + Math.sin(a) * r * 0.95);
+          c.stroke();
+        }
+        // Hinge dot at the base
+        c.fillStyle = '#C8607A';
+        c.beginPath();
+        c.arc(0, cs * 0.15, r * 0.08, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    },
+
+    // Enemy: a pufferfish that drifts back and forth. Friendly googly
+    // eyes, slight body wobble. Bounces the player on touch.
+    enemy: {
+      name: 'Puffy Fish',
+      draw(c, sx, sy, cs, facing) {
+        c.save();
+        c.translate(sx, sy);
+        c.scale(facing, 1);
+        // Subtle wobble
+        const wob = 1 + Math.sin(performance.now() / 200) * 0.04;
+        c.scale(wob, 1 / wob);
+        // Body — round orange-coral puffer
+        c.fillStyle = '#FFA86B';
+        c.beginPath();
+        c.arc(0, -cs * 0.35, cs * 0.35, 0, Math.PI * 2);
+        c.fill();
+        // Spikes around the body (short triangles)
+        c.fillStyle = '#E08040';
+        const spikes = 8;
+        for (let i = 0; i < spikes; i++) {
+          const a = (i / spikes) * Math.PI * 2;
+          const x1 = Math.cos(a) * cs * 0.35;
+          const y1 = -cs * 0.35 + Math.sin(a) * cs * 0.35;
+          const x2 = Math.cos(a) * cs * 0.46;
+          const y2 = -cs * 0.35 + Math.sin(a) * cs * 0.46;
+          const ax = Math.cos(a + 0.15) * cs * 0.35;
+          const ay = -cs * 0.35 + Math.sin(a + 0.15) * cs * 0.35;
+          c.beginPath();
+          c.moveTo(x1, y1);
+          c.lineTo(x2, y2);
+          c.lineTo(ax, ay);
+          c.closePath();
+          c.fill();
+        }
+        // Tail fin
+        c.fillStyle = '#E08040';
+        c.beginPath();
+        c.moveTo(-cs * 0.3, -cs * 0.4);
+        c.lineTo(-cs * 0.55, -cs * 0.55);
+        c.lineTo(-cs * 0.55, -cs * 0.2);
+        c.closePath();
+        c.fill();
+        // Belly highlight
+        c.fillStyle = 'rgba(255, 240, 200, 0.6)';
+        c.beginPath();
+        c.ellipse(0, -cs * 0.22, cs * 0.22, cs * 0.12, 0, 0, Math.PI * 2);
+        c.fill();
+        // Eyes — friendly, googly
+        c.fillStyle = 'white';
+        c.beginPath();
+        c.arc(cs * 0.13, -cs * 0.45, cs * 0.08, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'black';
+        c.beginPath();
+        c.arc(cs * 0.15, -cs * 0.44, cs * 0.04, 0, Math.PI * 2);
+        c.fill();
+        // Tiny smile
+        c.strokeStyle = '#7A4020';
+        c.lineWidth = Math.max(1, cs * 0.025);
+        c.lineCap = 'round';
+        c.beginPath();
+        c.arc(cs * 0.1, -cs * 0.28, cs * 0.06, 0.2, Math.PI - 0.2);
+        c.stroke();
+        c.restore();
+      }
+    }
+  },
+
+  // ===========================================================
+  // SKY KINGDOM (Pass 3)
+  // ===========================================================
+  // Pale sky-blue palette, cloud platforms, golden sunbeam spikes.
+  // Distant mountain silhouettes for depth. The mood is bright,
+  // airy, daydreamy — a kingdom in the clouds.
+  // ===========================================================
+  sky: {
+    id: 'sky',
+    name: 'Sky Kingdom',
+    emoji: '☁️',
+    palette: {
+      '--sky-top':       '#B0DCF5',   // bright daytime sky
+      '--sky-bot':       '#FBE6E0',   // soft pink-cream low haze
+      '--ground':        '#F5F9FF',   // fluffy cumulus white
+      '--ground-deep':   '#B8C8DC',   // shadowed cloud underside
+      '--ground-top':    '#FFFFFF',   // pure white cloud top
+      '--platform':      '#FFD6DC',   // pink-tinted sunset cloud
+      '--platform-deep': '#E89AA6'    // deeper pink underside
+    },
+
+    // Distant clouds drifting at different depths for parallax.
+    bgClouds: Array.from({ length: 8 }, () => ({
+      x: Math.random() * 32,
+      y: 0.5 + Math.random() * 4,
+      scale: 0.7 + Math.random() * 0.8,
+      speed: 0.05 + Math.random() * 0.15
+    })),
+
+    drawGround(c, sx, sy, tx, ty, cs) {
+      // Pure-white cloud-top with shadow underside.
+      c.fillStyle = getCSS('--ground-deep');
+      c.fillRect(sx, sy + cs * 0.5, cs, cs * 0.5);
+      c.fillStyle = getCSS('--ground');
+      c.fillRect(sx, sy + cs * 0.15, cs, cs * 0.45);
+      // Top fluff — series of rounded humps for the cloud-top look
+      c.fillStyle = getCSS('--ground-top');
+      c.beginPath();
+      const r = cs * 0.18;
+      for (let i = 0; i < 3; i++) {
+        const cx = sx + cs * (0.2 + i * 0.3);
+        c.arc(cx, sy + cs * 0.2, r, 0, Math.PI * 2);
+      }
+      c.fill();
+    },
+
+    drawDirt(c, sx, sy, tx, ty, cs) {
+      // Denser, darker cloud — the foundation level.
+      c.fillStyle = getCSS('--ground-deep');
+      c.fillRect(sx, sy, cs, cs);
+      // A few darker speckles for texture
+      c.fillStyle = 'rgba(110, 130, 155, 0.4)';
+      const seed = (tx * 13 + ty * 7) % 4;
+      c.beginPath();
+      c.arc(sx + cs * (0.25 + seed * 0.05), sy + cs * 0.35, cs * 0.06, 0, Math.PI * 2);
+      c.arc(sx + cs * 0.7, sy + cs * 0.65, cs * 0.05, 0, Math.PI * 2);
+      c.fill();
+    },
+
+    drawPlatform(c, sx, sy, tx, ty, cs) {
+      // Pink-tinted sunset cloud.
+      c.fillStyle = getCSS('--platform-deep');
+      c.fillRect(sx, sy + cs * 0.4, cs, cs * 0.5);
+      c.fillStyle = getCSS('--platform');
+      c.fillRect(sx, sy + cs * 0.1, cs, cs * 0.4);
+      // Fluffy top humps
+      c.fillStyle = '#FFE8EC';
+      c.beginPath();
+      const r = cs * 0.14;
+      for (let i = 0; i < 3; i++) {
+        const cx = sx + cs * (0.18 + i * 0.32);
+        c.arc(cx, sy + cs * 0.15, r, 0, Math.PI * 2);
+      }
+      c.fill();
+    },
+
+    drawSpikes(c, sx, sy, tx, ty, cs) {
+      // Golden sunbeam rays pointing up — visually warm but pointy.
+      c.fillStyle = '#FFD24A';
+      c.strokeStyle = '#E0A020';
+      c.lineWidth = Math.max(1, cs * 0.02);
+      for (let i = 0; i < 4; i++) {
+        const bx = sx + cs * (0.1 + i * 0.27);
+        c.beginPath();
+        c.moveTo(bx, sy + cs);
+        c.lineTo(bx + cs * 0.135, sy + cs * 0.1);
+        c.lineTo(bx + cs * 0.27, sy + cs);
+        c.closePath();
+        c.fill();
+        c.stroke();
+      }
+    },
+
+    drawBackground(c, w, h, world) {
+      // Paint the opaque sky gradient FIRST — this is what clears the
+      // canvas of last frame's pixels. Without this, players and
+      // particles leave tracer trails. (Bug found in Pass 3 testing:
+      // initially relied on body CSS to show through, but the canvas
+      // is opaque-on-top, so the gradient MUST be drawn on the canvas.)
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, getCSS('--sky-top'));
+      sky.addColorStop(1, getCSS('--sky-bot'));
+      c.fillStyle = sky;
+      c.fillRect(0, 0, w, h);
+
+      const cs = tileSize;
+      const camX = world.camera.x;
+      // Distant pale mountain silhouettes — fixed-position relative to world,
+      // so they parallax slowly.
+      c.fillStyle = 'rgba(180, 195, 220, 0.45)';
+      const mt = [
+        { x: 4,  y: 8, w: 6, h: 3 },
+        { x: 11, y: 8.5, w: 5, h: 2.5 },
+        { x: 17, y: 8, w: 7, h: 3 },
+        { x: 24, y: 8.3, w: 5, h: 2.7 }
+      ];
+      for (const m of mt) {
+        const px = (m.x - camX * 0.3) * cs;
+        const py = m.y * cs;
+        c.beginPath();
+        c.moveTo(px, py + m.h * cs);
+        c.lineTo(px + m.w * 0.5 * cs, py);
+        c.lineTo(px + m.w * cs, py + m.h * cs);
+        c.closePath();
+        c.fill();
+      }
+      // Drifting clouds (medium depth)
+      const t = performance.now() * 0.001;
+      c.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      for (const cl of this.bgClouds) {
+        const x = ((cl.x + t * cl.speed) % 32) - 4;
+        const px = (x - camX * 0.5) * cs;
+        const py = cl.y * cs;
+        const s = cl.scale;
+        c.beginPath();
+        c.arc(px,                 py,                 cs * 0.4 * s, 0, Math.PI * 2);
+        c.arc(px + cs * 0.5 * s,  py - cs * 0.1 * s,  cs * 0.5 * s, 0, Math.PI * 2);
+        c.arc(px + cs * 1.0 * s,  py,                 cs * 0.4 * s, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    drawGoal(c, gx, gy, cs, wave) {
+      // A golden sun-tower with rays. (Different from castle's banner-flag.)
+      const cx = gx + cs / 2;
+      const cy = gy + cs / 2;
+      const r = cs * 0.32;
+      // Soft glow
+      const grad = c.createRadialGradient(cx, cy, r * 0.3, cx, cy, r * 1.8);
+      grad.addColorStop(0, 'rgba(255, 220, 100, 0.7)');
+      grad.addColorStop(1, 'rgba(255, 220, 100, 0)');
+      c.fillStyle = grad;
+      c.beginPath();
+      c.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
+      c.fill();
+      // Sun rays (rotating with wave)
+      c.save();
+      c.translate(cx, cy);
+      c.rotate(wave * 0.4);
+      c.fillStyle = '#FFD24A';
+      for (let i = 0; i < 8; i++) {
+        c.rotate(Math.PI / 4);
+        c.beginPath();
+        c.moveTo(-cs * 0.04, -r);
+        c.lineTo(cs * 0.04, -r);
+        c.lineTo(0, -r * 1.5);
+        c.closePath();
+        c.fill();
+      }
+      c.restore();
+      // Solid disc center
+      c.fillStyle = '#FFC020';
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#FFE890';
+      c.beginPath();
+      c.arc(cx - r * 0.3, cy - r * 0.3, r * 0.25, 0, Math.PI * 2);
+      c.fill();
+    },
+
+    collectibleA: {
+      name: 'Star',
+      draw(c, cx, cy, cs, bob) {
+        // Small twinkling star with soft halo.
+        const size = cs * 0.4;
+        // Halo glow (radial, no shadowBlur)
+        const grad = c.createRadialGradient(cx, cy, 0, cx, cy, size * 1.8);
+        grad.addColorStop(0, 'rgba(255, 255, 200, 0.6)');
+        grad.addColorStop(1, 'rgba(255, 255, 200, 0)');
+        c.fillStyle = grad;
+        c.beginPath();
+        c.arc(cx, cy, size * 1.8, 0, Math.PI * 2);
+        c.fill();
+        // Star shape (5-pointed)
+        c.fillStyle = '#FFE060';
+        c.strokeStyle = '#E0A020';
+        c.lineWidth = Math.max(1, cs * 0.025);
+        c.beginPath();
+        for (let i = 0; i < 10; i++) {
+          const angle = (i * Math.PI / 5) - Math.PI / 2;
+          const r = i % 2 === 0 ? size : size * 0.4;
+          const px = cx + Math.cos(angle) * r;
+          const py = cy + Math.sin(angle) * r;
+          if (i === 0) c.moveTo(px, py);
+          else c.lineTo(px, py);
+        }
+        c.closePath();
+        c.fill();
+        c.stroke();
+      }
+    },
+
+    collectibleB: {
+      name: 'Feather',
+      draw(c, cx, cy, cs, bob) {
+        // Downy feather, tilted slightly with the bob.
+        const size = cs * 0.4;
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(Math.sin(bob) * 0.2 - 0.3);
+        // Feather body — teardrop shape
+        c.fillStyle = '#FFFFFF';
+        c.strokeStyle = '#B8C8DC';
+        c.lineWidth = Math.max(1, cs * 0.025);
+        c.beginPath();
+        c.moveTo(0, -size);
+        c.bezierCurveTo(size * 0.6, -size * 0.5, size * 0.4, size * 0.6, 0, size * 0.8);
+        c.bezierCurveTo(-size * 0.4, size * 0.6, -size * 0.6, -size * 0.5, 0, -size);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        // Central spine
+        c.strokeStyle = '#A0B0C8';
+        c.lineWidth = Math.max(1, cs * 0.03);
+        c.beginPath();
+        c.moveTo(0, -size * 0.9);
+        c.lineTo(0, size * 0.75);
+        c.stroke();
+        // Soft pink tip
+        c.fillStyle = '#FFD6DC';
+        c.beginPath();
+        c.arc(0, -size * 0.85, size * 0.12, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    },
+
+    enemy: {
+      name: 'Cloud Sprite',
+      draw(c, sx, sy, cs, facing) {
+        // Round, fluffy white sprite with a cheerful face. Bobs gently —
+        // the bob is in the engine, here we just render at the given y.
+        c.save();
+        c.translate(sx + cs / 2, sy + cs / 2);
+        if (facing < 0) c.scale(-1, 1);
+        // Body — three overlapping puffs for a cloud silhouette
+        c.fillStyle = '#FFFFFF';
+        c.strokeStyle = '#B8C8DC';
+        c.lineWidth = Math.max(1, cs * 0.03);
+        c.beginPath();
+        c.arc(-cs * 0.18, cs * 0.05, cs * 0.22, 0, Math.PI * 2);
+        c.arc(cs * 0.18,  cs * 0.05, cs * 0.22, 0, Math.PI * 2);
+        c.arc(0,          -cs * 0.1, cs * 0.27, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+        // Eyes
+        c.fillStyle = '#3D4A5F';
+        c.beginPath();
+        c.arc(-cs * 0.09, -cs * 0.1, cs * 0.045, 0, Math.PI * 2);
+        c.arc( cs * 0.09, -cs * 0.1, cs * 0.045, 0, Math.PI * 2);
+        c.fill();
+        // Tiny eye highlights
+        c.fillStyle = '#FFFFFF';
+        c.beginPath();
+        c.arc(-cs * 0.075, -cs * 0.12, cs * 0.015, 0, Math.PI * 2);
+        c.arc( cs * 0.105, -cs * 0.12, cs * 0.015, 0, Math.PI * 2);
+        c.fill();
+        // Smile
+        c.strokeStyle = '#3D4A5F';
+        c.lineWidth = Math.max(1, cs * 0.025);
+        c.lineCap = 'round';
+        c.beginPath();
+        c.arc(0, -cs * 0.02, cs * 0.07, 0.2, Math.PI - 0.2);
+        c.stroke();
+        // Tiny rosy cheeks
+        c.fillStyle = 'rgba(240, 158, 176, 0.5)';
+        c.beginPath();
+        c.arc(-cs * 0.16, -cs * 0.02, cs * 0.045, 0, Math.PI * 2);
+        c.arc( cs * 0.16, -cs * 0.02, cs * 0.045, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    }
+  },
+
+  // ===========================================================
+  // FAIRY GARDEN (Pass 3)
+  // ===========================================================
+  // Lavender-pink palette, lush grass with violets, giant-leaf platforms,
+  // thorny pink vines. The mood is whimsical and oversized — she's
+  // adventuring through a garden the size of a forest.
+  // ===========================================================
+  fairy: {
+    id: 'fairy',
+    name: 'Fairy Garden',
+    emoji: '🌸',
+    palette: {
+      '--sky-top':       '#F5C8E8',   // lavender pink sky
+      '--sky-bot':       '#FFE8F2',   // pale pink near horizon
+      '--ground':        '#6BA84F',   // lush garden grass
+      '--ground-deep':   '#5C3820',   // rich brown soil
+      '--ground-top':    '#90D070',   // bright fresh grass blades
+      '--platform':      '#A0C868',   // leaf green
+      '--platform-deep': '#608040'    // leaf shadow
+    },
+
+    // Drifting pollen / glitter motes in the background.
+    pollen: Array.from({ length: 14 }, () => ({
+      x: Math.random() * 32,
+      yBase: Math.random() * 9,
+      speed: 0.3 + Math.random() * 0.5,
+      size: 0.2 + Math.random() * 0.3,
+      phase: Math.random() * Math.PI * 2
+    })),
+
+    drawGround(c, sx, sy, tx, ty, cs) {
+      // Soil base, then grass-blade top with tiny violets.
+      c.fillStyle = getCSS('--ground');
+      c.fillRect(sx, sy + cs * 0.25, cs, cs * 0.75);
+      // Grass blade top
+      c.fillStyle = getCSS('--ground-top');
+      c.beginPath();
+      c.moveTo(sx, sy + cs * 0.3);
+      for (let i = 0; i < 6; i++) {
+        const bx = sx + cs * (i / 6);
+        c.lineTo(bx, sy + cs * 0.05);
+        c.lineTo(bx + cs * (1 / 12), sy + cs * 0.3);
+      }
+      c.lineTo(sx + cs, sy + cs * 0.3);
+      c.closePath();
+      c.fill();
+      // Tiny violet flowers (deterministic per tile)
+      const seed = (tx * 17 + ty * 11) % 7;
+      if (seed < 3) {
+        const fx = sx + cs * (0.2 + seed * 0.25);
+        const fy = sy + cs * 0.18;
+        c.fillStyle = '#A060C8';
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2;
+          c.beginPath();
+          c.arc(fx + Math.cos(a) * cs * 0.04, fy + Math.sin(a) * cs * 0.04, cs * 0.035, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.fillStyle = '#FFD040';
+        c.beginPath();
+        c.arc(fx, fy, cs * 0.025, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    drawDirt(c, sx, sy, tx, ty, cs) {
+      // Rich dark brown soil with subtle texture.
+      c.fillStyle = getCSS('--ground-deep');
+      c.fillRect(sx, sy, cs, cs);
+      // Tiny darker speckles for soil texture
+      c.fillStyle = 'rgba(40, 20, 5, 0.4)';
+      const seed = (tx * 19 + ty * 7) % 5;
+      c.beginPath();
+      c.arc(sx + cs * (0.2 + seed * 0.05), sy + cs * 0.35, cs * 0.05, 0, Math.PI * 2);
+      c.arc(sx + cs * 0.7, sy + cs * 0.7,  cs * 0.04, 0, Math.PI * 2);
+      c.arc(sx + cs * 0.4, sy + cs * 0.8,  cs * 0.035, 0, Math.PI * 2);
+      c.fill();
+      // Occasional pink root / worm shape
+      if (seed === 0) {
+        c.strokeStyle = '#C06080';
+        c.lineWidth = Math.max(1, cs * 0.04);
+        c.lineCap = 'round';
+        c.beginPath();
+        c.moveTo(sx + cs * 0.15, sy + cs * 0.5);
+        c.bezierCurveTo(sx + cs * 0.4, sy + cs * 0.4, sx + cs * 0.6, sy + cs * 0.7, sx + cs * 0.85, sy + cs * 0.55);
+        c.stroke();
+      }
+    },
+
+    drawPlatform(c, sx, sy, tx, ty, cs) {
+      // A giant leaf laid horizontally — central vein with side veins.
+      c.fillStyle = getCSS('--platform-deep');
+      c.fillRect(sx, sy + cs * 0.45, cs, cs * 0.4);
+      c.fillStyle = getCSS('--platform');
+      c.beginPath();
+      // Leaf top — gentle curve
+      c.moveTo(sx, sy + cs * 0.5);
+      c.bezierCurveTo(sx + cs * 0.2, sy + cs * 0.1, sx + cs * 0.8, sy + cs * 0.1, sx + cs, sy + cs * 0.5);
+      c.lineTo(sx + cs, sy + cs * 0.55);
+      c.lineTo(sx, sy + cs * 0.55);
+      c.closePath();
+      c.fill();
+      // Central vein
+      c.strokeStyle = '#608040';
+      c.lineWidth = Math.max(1, cs * 0.04);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(sx + cs * 0.1, sy + cs * 0.4);
+      c.lineTo(sx + cs * 0.9, sy + cs * 0.4);
+      c.stroke();
+      // Side veins
+      c.lineWidth = Math.max(1, cs * 0.025);
+      for (let i = 0; i < 3; i++) {
+        const vx = sx + cs * (0.3 + i * 0.2);
+        c.beginPath();
+        c.moveTo(vx, sy + cs * 0.4);
+        c.lineTo(vx + cs * 0.08, sy + cs * 0.25);
+        c.stroke();
+      }
+    },
+
+    drawSpikes(c, sx, sy, tx, ty, cs) {
+      // Thorny pink vines — sharp triangular thorns growing from a vine.
+      // Vine base
+      c.strokeStyle = '#7A3050';
+      c.lineWidth = Math.max(1, cs * 0.08);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(sx + cs * 0.05, sy + cs * 0.95);
+      c.lineTo(sx + cs * 0.95, sy + cs * 0.95);
+      c.stroke();
+      // Thorns
+      c.fillStyle = '#D85090';
+      c.strokeStyle = '#7A3050';
+      c.lineWidth = Math.max(1, cs * 0.02);
+      for (let i = 0; i < 4; i++) {
+        const bx = sx + cs * (0.1 + i * 0.27);
+        c.beginPath();
+        c.moveTo(bx, sy + cs * 0.95);
+        c.lineTo(bx + cs * 0.135, sy + cs * 0.1);
+        c.lineTo(bx + cs * 0.27, sy + cs * 0.95);
+        c.closePath();
+        c.fill();
+        c.stroke();
+      }
+    },
+
+    drawBackground(c, w, h, world) {
+      // Paint the opaque sky gradient FIRST — clears last frame's pixels.
+      // Without this, drawing semi-transparent flowers/pollen on top of
+      // the previous frame produces tracer trails. (See Sky Kingdom fix
+      // for the full explanation.)
+      const sky = c.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, getCSS('--sky-top'));
+      sky.addColorStop(1, getCSS('--sky-bot'));
+      c.fillStyle = sky;
+      c.fillRect(0, 0, w, h);
+
+      // Oversized flower silhouettes in the distance + drifting glitter pollen.
+      const cs = tileSize;
+      const camX = world.camera.x;
+      // Distant flower silhouettes — slow parallax
+      c.fillStyle = 'rgba(220, 170, 200, 0.5)';
+      const flowers = [
+        { x: 3,  y: 7, r: 1.4 },
+        { x: 10, y: 6, r: 1.7 },
+        { x: 17, y: 7.5, r: 1.3 },
+        { x: 24, y: 6.5, r: 1.6 }
+      ];
+      for (const f of flowers) {
+        const px = (f.x - camX * 0.25) * cs;
+        const py = f.y * cs;
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2;
+          c.beginPath();
+          c.arc(px + Math.cos(a) * f.r * cs * 0.5, py + Math.sin(a) * f.r * cs * 0.5, f.r * cs * 0.35, 0, Math.PI * 2);
+          c.fill();
+        }
+        c.fillStyle = 'rgba(255, 200, 80, 0.7)';
+        c.beginPath();
+        c.arc(px, py, f.r * cs * 0.25, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = 'rgba(220, 170, 200, 0.5)';
+      }
+      // Glitter pollen drift
+      const t = performance.now() * 0.001;
+      for (const p of this.pollen) {
+        const yOsc = p.yBase + Math.sin(t * p.speed + p.phase) * 0.4;
+        const x = ((p.x + t * p.speed * 0.3) % 32) - 4;
+        const px = (x - camX * 0.6) * cs;
+        const py = yOsc * cs;
+        const flicker = 0.5 + 0.5 * Math.sin(t * 3 + p.phase);
+        c.fillStyle = 'rgba(255, 220, 240, ' + (0.4 + 0.4 * flicker) + ')';
+        c.beginPath();
+        c.arc(px, py, p.size * cs, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    drawGoal(c, gx, gy, cs, wave) {
+      // Large magical flower with sparkly center.
+      const cx = gx + cs / 2;
+      const cy = gy + cs / 2;
+      const r = cs * 0.42;
+      // Soft glow
+      const grad = c.createRadialGradient(cx, cy, r * 0.3, cx, cy, r * 1.8);
+      grad.addColorStop(0, 'rgba(255, 200, 220, 0.7)');
+      grad.addColorStop(1, 'rgba(255, 200, 220, 0)');
+      c.fillStyle = grad;
+      c.beginPath();
+      c.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
+      c.fill();
+      // Petals — pink five-petal flower
+      c.fillStyle = '#FF9DC0';
+      c.strokeStyle = '#D85090';
+      c.lineWidth = Math.max(1, cs * 0.025);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + wave * 0.3;
+        const px = cx + Math.cos(a) * r * 0.6;
+        const py = cy + Math.sin(a) * r * 0.6;
+        c.beginPath();
+        c.arc(px, py, r * 0.5, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+      }
+      // Yellow sparkly center
+      c.fillStyle = '#FFD040';
+      c.beginPath();
+      c.arc(cx, cy, r * 0.32, 0, Math.PI * 2);
+      c.fill();
+      // Sparkle dots — wave-bobbed
+      c.fillStyle = '#FFFFFF';
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + wave;
+        c.beginPath();
+        c.arc(cx + Math.cos(a) * r * 0.18, cy + Math.sin(a) * r * 0.18, r * 0.05, 0, Math.PI * 2);
+        c.fill();
+      }
+    },
+
+    collectibleA: {
+      name: 'Pixie Dust',
+      draw(c, cx, cy, cs, bob) {
+        // Glowing pink mote with sparkle dots.
+        const size = cs * 0.32;
+        // Halo (radial gradient — never shadowBlur)
+        const grad = c.createRadialGradient(cx, cy, 0, cx, cy, size * 2.0);
+        grad.addColorStop(0, 'rgba(255, 200, 220, 0.8)');
+        grad.addColorStop(1, 'rgba(255, 200, 220, 0)');
+        c.fillStyle = grad;
+        c.beginPath();
+        c.arc(cx, cy, size * 2.0, 0, Math.PI * 2);
+        c.fill();
+        // Main mote body
+        c.fillStyle = '#FFB8D0';
+        c.beginPath();
+        c.arc(cx, cy, size, 0, Math.PI * 2);
+        c.fill();
+        // Inner brighter core
+        c.fillStyle = '#FFFFFF';
+        c.beginPath();
+        c.arc(cx, cy, size * 0.4, 0, Math.PI * 2);
+        c.fill();
+        // Tiny sparkle dots around the mote
+        c.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + bob * 0.5;
+          c.beginPath();
+          c.arc(cx + Math.cos(a) * size * 1.4, cy + Math.sin(a) * size * 1.4, size * 0.12, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+    },
+
+    collectibleB: {
+      name: 'Jewel Petal',
+      draw(c, cx, cy, cs, bob) {
+        // Small jewel-shaped petal — diamond facets.
+        const size = cs * 0.35;
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(Math.sin(bob) * 0.15);
+        // Soft halo
+        const grad = c.createRadialGradient(0, 0, 0, 0, 0, size * 1.8);
+        grad.addColorStop(0, 'rgba(180, 120, 200, 0.45)');
+        grad.addColorStop(1, 'rgba(180, 120, 200, 0)');
+        c.fillStyle = grad;
+        c.beginPath();
+        c.arc(0, 0, size * 1.8, 0, Math.PI * 2);
+        c.fill();
+        // Petal-jewel — diamond outline
+        c.fillStyle = '#C880E0';
+        c.strokeStyle = '#7A40A0';
+        c.lineWidth = Math.max(1, cs * 0.03);
+        c.beginPath();
+        c.moveTo(0, -size);
+        c.lineTo(size * 0.6, 0);
+        c.lineTo(0, size);
+        c.lineTo(-size * 0.6, 0);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        // Highlight facet
+        c.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        c.beginPath();
+        c.moveTo(0, -size * 0.85);
+        c.lineTo(size * 0.25, -size * 0.1);
+        c.lineTo(-size * 0.25, -size * 0.1);
+        c.closePath();
+        c.fill();
+        c.restore();
+      }
+    },
+
+    enemy: {
+      name: 'Friendly Bee',
+      draw(c, sx, sy, cs, facing) {
+        c.save();
+        c.translate(sx + cs / 2, sy + cs / 2);
+        if (facing < 0) c.scale(-1, 1);
+        // Wings (subtle, behind body)
+        c.fillStyle = 'rgba(220, 230, 255, 0.7)';
+        c.strokeStyle = 'rgba(150, 180, 220, 0.7)';
+        c.lineWidth = Math.max(1, cs * 0.02);
+        c.beginPath();
+        c.ellipse(-cs * 0.18, -cs * 0.22, cs * 0.16, cs * 0.1, -0.4, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+        c.beginPath();
+        c.ellipse(cs * 0.05, -cs * 0.24, cs * 0.18, cs * 0.11, 0.3, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+        // Body — yellow with dark stripes
+        c.fillStyle = '#FFD24A';
+        c.strokeStyle = '#3D2A10';
+        c.lineWidth = Math.max(1, cs * 0.03);
+        c.beginPath();
+        c.ellipse(0, cs * 0.02, cs * 0.28, cs * 0.22, 0, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+        // Two dark stripes
+        c.fillStyle = '#3D2A10';
+        c.beginPath();
+        c.ellipse(-cs * 0.05, cs * 0.02, cs * 0.045, cs * 0.22, 0, 0, Math.PI * 2);
+        c.fill();
+        c.beginPath();
+        c.ellipse(cs * 0.1, cs * 0.02, cs * 0.045, cs * 0.2, 0, 0, Math.PI * 2);
+        c.fill();
+        // Face — left side (facing direction)
+        c.fillStyle = '#3D2A10';
+        c.beginPath();
+        c.arc(-cs * 0.18, -cs * 0.03, cs * 0.03, 0, Math.PI * 2);
+        c.fill();
+        // Smile
+        c.strokeStyle = '#3D2A10';
+        c.lineWidth = Math.max(1, cs * 0.022);
+        c.lineCap = 'round';
+        c.beginPath();
+        c.arc(-cs * 0.21, cs * 0.04, cs * 0.05, 0.1, Math.PI - 0.5);
+        c.stroke();
+        // Tiny antennae
+        c.lineWidth = Math.max(1, cs * 0.022);
+        c.beginPath();
+        c.moveTo(-cs * 0.21, -cs * 0.15);
+        c.lineTo(-cs * 0.28, -cs * 0.25);
+        c.stroke();
+        c.fillStyle = '#3D2A10';
+        c.beginPath();
+        c.arc(-cs * 0.28, -cs * 0.27, cs * 0.022, 0, Math.PI * 2);
+        c.fill();
+        c.restore();
+      }
+    }
+  }
+};
+
+// Default world used for any saved level that doesn't specify one (step 3
+// adds the worldId field; existing saves default to meadow on load).
+const DEFAULT_WORLD_ID = 'meadow';
+
+// Returns the world that should be used for the current rendering context.
+// In editor mode it follows editor.worldId; otherwise the live level's
+// worldId; falling back to meadow for back-compat or if a saved level
+// references a world that no longer exists.
+function getCurrentWorld() {
+  if (view === 'editor' && editor && editor.worldId && WORLDS[editor.worldId]) {
+    return WORLDS[editor.worldId];
+  }
+  if (world && world.worldId && WORLDS[world.worldId]) return WORLDS[world.worldId];
+  return WORLDS[DEFAULT_WORLD_ID];
+}
+
+// Writes a world's palette to :root, so all CSS-variable reads (both in
+// JS via getCSS and in stylesheet rules like the body sky gradient and
+// the various UI accents) pick up the right colors instantly. Idempotent;
+// safe to call repeatedly. Pass an unknown id and it falls back to the
+// default world (meadow).
+function applyWorld(worldId) {
+  const wd = WORLDS[worldId] || WORLDS[DEFAULT_WORLD_ID];
+  const root = document.documentElement;
+  for (const [name, value] of Object.entries(wd.palette)) {
+    root.style.setProperty(name, value);
+  }
+  // Force a style recalc + repaint. On iOS Safari and especially Chrome
+  // on iPad, mutating CSS custom properties does not always invalidate
+  // rules that consume them (like body's background: linear-gradient(
+  // var(--sky-top), var(--sky-bot))). The body keeps painting the
+  // previous palette until some other reflow happens (window resize,
+  // orientation change, etc). Reading offsetHeight forces sync layout
+  // and reliably triggers the repaint with the new variable values.
+  // eslint-disable-next-line no-unused-expressions
+  document.body.offsetHeight;
+}
+
+// ---------- Levels (hand-designed) ----------
+// Convention: 24 wide x 14 tall, tile size dynamic.
+// Each row is a string. First column is x=0.
+const LEVELS = [
+  {
+    name: 'First Steps',
+    worldId: 'meadow',
+    rows: [
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '...........*............',
+      '........=====...........',
+      '........................',
+      '....*...........+.......',
+      '..====..........*.......',
+      '..............====......',
+      '......................G.',
+      '.S....................=.',
+      '======================..',
+      '######################..'
+    ]
+  },
+  {
+    name: 'Up We Go',
+    worldId: 'meadow',
+    // Staircase going up-right. Each rise is 3 tiles (well within the
+    // 4-tile max jump). Platforms overlap horizontally so no precise
+    // sideways timing is needed — she can jump almost straight up.
+    rows: [
+      '........................',
+      '..................G.....',
+      '................======..',
+      '........................',
+      '.............*..........',
+      '...........======.......',
+      '........................',
+      '........*...............',
+      '......======............',
+      '........................',
+      '...*....................',
+      '.======.................',
+      '.S......................',
+      '========================'
+    ]
+  },
+  {
+    name: 'Mind the Gap',
+    worldId: 'meadow',
+    // The "skip across spike pits" level. Ground is broken into segments
+    // separated by 3-tile-wide spike pits (easily clearable). Stars hover
+    // above floating platforms at rise=3 — reachable for the brave.
+    rows: [
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '...........+............',
+      '.......*........*.......',
+      '........................',
+      '......====....====......',
+      '........................',
+      '.S....................G.',
+      '====...====...====...===',
+      '....XXX....XXX....XXX...'
+    ]
+  },
+  {
+    name: 'Meadow Picnic',
+    worldId: 'meadow',
+    // Two-tier platform layout. Snail patrols the upper right platform.
+    // Strong overlap between tiers — she can take the lower path or
+    // the upper path. Both collectible types scattered through.
+    rows: [
+      '........................',
+      '........................',
+      '..............+.........',
+      '............=======.....',
+      '........................',
+      '...*...........*........',
+      '..............W.........',
+      '..======....========....',
+      '........................',
+      '..........*.............',
+      '........======..........',
+      '.S....................G.',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Sky Hop',
+    worldId: 'meadow',
+    // Vertical climb through stacked platforms. Each rise is small,
+    // each platform overlaps the one below. Star at every level — she
+    // collects them as she ascends to the high goal.
+    rows: [
+      '...........G............',
+      '.........======.........',
+      '........................',
+      '..........*.............',
+      '......======............',
+      '........................',
+      '............*...........',
+      '..........======........',
+      '..+.....................',
+      '......*.................',
+      '....======..............',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Castle Stroll',
+    worldId: 'castle',
+    // Gentle introduction to Rainbow Castle. Banner-platform stepping
+    // stones with strong horizontal overlap (so no precise sideways
+    // timing), a wolf patrolling a wide step, a rainbow and a gem to
+    // collect. (Reminder: enemies must sit one row ABOVE the platform
+    // they patrol; the parser looks at y+1 for solid floor.)
+    rows: [
+      '........................',
+      '........................',
+      '........................',
+      '..........+.............',
+      '........=========.....G.',
+      '....................====',
+      '......W.................',
+      '....======..............',
+      '.........*..............',
+      '...*....................',
+      '.======.................',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Banner Brigade',
+    worldId: 'castle',
+    // A cascade of banner platforms with the gem at a reachable height.
+    // Two wolves on overlapping platforms — she can bounce on them or
+    // jump over. Each rise is 2-3 tiles with strong horizontal overlap.
+    rows: [
+      '........................',
+      '........................',
+      '............+...........',
+      '..........========......',
+      '........................',
+      '...........W............',
+      '.......========.........',
+      '........................',
+      '....*.............W.....',
+      '.======.......========..',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Rainbow Climb',
+    worldId: 'castle',
+    // Mostly vertical level — climb a tower of banner platforms with
+    // rainbows at each landing. Goal sits at the very top.
+    rows: [
+      '..G.....................',
+      '======..................',
+      '........................',
+      '...*....................',
+      '......======............',
+      '..*.....................',
+      '..======................',
+      '...........+............',
+      '........======..........',
+      '..........*.............',
+      '..====..................',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Wolf Walk',
+    worldId: 'castle',
+    // Two wolves on overlapping platforms. Stepping platforms make the
+    // climb between them comfortable. Gem reachable via stepping stones
+    // from the lower banner.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '........................',
+      '...W............W.......',
+      '.=======......=======...',
+      '........................',
+      '......======......======',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Throne Room',
+    worldId: 'castle',
+    // The castle's grand finale — wide level with multiple paths,
+    // both collectible types, a wolf to bounce on, and a high goal
+    // perched on a banner.
+    rows: [
+      '........................',
+      '...................G....',
+      '.................====...',
+      '........................',
+      '......+.....+...........',
+      '....======.======.......',
+      '..........W.............',
+      '........=========.......',
+      '........................',
+      '..*..............*......',
+      '..======......======....',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Forest Wander',
+    worldId: 'forest',
+    // Mushroom-platform stepping stones through the woods. A friendly
+    // spider patrols a wide step; fireflies dot the route; an acorn
+    // sits at a reachable canopy spot. Strong horizontal overlap
+    // between platforms so no precise sideways timing is needed.
+    rows: [
+      '........................',
+      '........................',
+      '..........+.............',
+      '........=========.......',
+      '........................',
+      '..........*.............',
+      '......W.................',
+      '....=========...........',
+      '...............======...',
+      '..*.....................',
+      '======.................G',
+      '.S...................===',
+      '====.................XXX',
+      '####.................###'
+    ]
+  },
+  {
+    name: 'Firefly Trail',
+    worldId: 'forest',
+    // Fireflies (A) line a winding path of small platforms. One acorn
+    // hidden in the canopy above. No enemy — gentle exploration.
+    rows: [
+      '........................',
+      '..........+.............',
+      '........======..........',
+      '........................',
+      '....*.........*.........',
+      '..======....======......',
+      '...............*........',
+      '...........========.....',
+      '..*.....................',
+      '======..................',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Mossy Bridge',
+    worldId: 'forest',
+    // Long horizontal level with spike-vine pits between ground
+    // segments. Mushroom platforms above offer a safer high route.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '........................',
+      '....*.........*.........',
+      '..======....======......',
+      '........................',
+      '........................',
+      '.S....................G.',
+      '===...====...====...====',
+      '...XXX....XXX....XXX....',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Spider Glade',
+    worldId: 'forest',
+    // A clearing with two spiders. Mushroom platforms make a circle
+    // around the central space — she can choose to bounce on the
+    // spiders or jump over them.
+    rows: [
+      '........................',
+      '........................',
+      '..............+.........',
+      '............=======.....',
+      '...W.................W..',
+      '======............======',
+      '........................',
+      '...*..............*.....',
+      '........................',
+      '.........=======........',
+      '...........*............',
+      '.S....................G.',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Deep Woods',
+    worldId: 'forest',
+    // Taller vertical level — climb through the canopy to a high
+    // lantern goal. Acorn near the top, fireflies guide the way.
+    rows: [
+      '.....G..................',
+      '...======...............',
+      '........................',
+      '...+....................',
+      '......======............',
+      '..........W.............',
+      '........=========.......',
+      '..*.....................',
+      '======..................',
+      '..............*.........',
+      '............======......',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Lagoon Splash',
+    worldId: 'lagoon',
+    // Coral platforms over the sandy seabed. Pufferfish patrols a
+    // mid-level platform on the right. Pearls + a seashell to collect,
+    // urchin spikes to jump over below.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '........................',
+      '....*........*.....*....',
+      '..======...======...====',
+      '...............W........',
+      '..............======....',
+      '.S....................G.',
+      '====...====...====...===',
+      '....XXX....XXX....XXX...',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Pearl Cove',
+    worldId: 'lagoon',
+    // A pearl-collection level. Low coral chain across the floor,
+    // a seashell tucked up at the top. No enemies — peaceful.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '........................',
+      '...*....*....*....*.....',
+      '..==...===...==..===....',
+      '........................',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Bubble Climb',
+    worldId: 'lagoon',
+    // Vertical climb up coral towers. Pearls at each landing, a
+    // seashell at the very top. Background bubbles thematically rise
+    // alongside her as she goes up.
+    rows: [
+      '...........G............',
+      '.........======.........',
+      '........................',
+      '..+.....................',
+      '....======..............',
+      '........................',
+      '...........*............',
+      '.........======.........',
+      '........................',
+      '..*.....................',
+      '....======..............',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Urchin Garden',
+    worldId: 'lagoon',
+    // Careful stepping between sea-urchin patches. Coral platforms
+    // give safe landing spots. Pufferfish patrols a high platform.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '..........W.............',
+      '........========........',
+      '...*..........*.........',
+      '..====......======......',
+      '........................',
+      '.S....................G.',
+      '==...===...===...===..==',
+      '..XXX...XXX...XXX..XXX..',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Coral Reef',
+    worldId: 'lagoon',
+    // The lagoon finale — wide reef with multiple paths, both
+    // collectible types in plenty, a pufferfish patrolling, and a
+    // high coral-arch goal.
+    rows: [
+      '........................',
+      '....................G...',
+      '..................====..',
+      '........................',
+      '......+......+..........',
+      '....======..======......',
+      '...........W............',
+      '........========........',
+      '....*..............*....',
+      '..======..........======',
+      '........................',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'First Flight',
+    worldId: 'sky',
+    // Gentle introduction to Sky Kingdom. One cloud platform, a star
+    // and a feather to collect, then the goal. No enemy, no spikes.
+    rows: [
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '........................',
+      '..........+.............',
+      '........======..........',
+      '........................',
+      '........................',
+      '....*................G..',
+      '..======............====',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Cloud Hopping',
+    worldId: 'sky',
+    // A chain of cloud platforms across the level. Each rise is 2-3
+    // tiles with strong overlap. Both collectibles scattered along.
+    rows: [
+      '........................',
+      '........................',
+      '............+...........',
+      '..........======........',
+      '........................',
+      '....*.............*.....',
+      '..======......======....',
+      '........................',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Sunbeam Steps',
+    worldId: 'sky',
+    // Introduces sunbeam spikes. Cloud platforms float above them as
+    // safe stepping stones — she can take the high road or carefully
+    // jump the gaps on the ground.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '........................',
+      '....*.........*.........',
+      '..======....======......',
+      '........................',
+      '........................',
+      '.S....................G.',
+      '===...====...====...====',
+      '...XXX....XXX....XXX....',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Sprite Meadow',
+    worldId: 'sky',
+    // Introduces the Cloud Sprite enemy. It patrols a wide cloud
+    // platform; collectibles wait above. She can bounce on it or hop
+    // around it.
+    rows: [
+      '........................',
+      '........................',
+      '..........+.............',
+      '........=======.........',
+      '........................',
+      '...........W............',
+      '......==========........',
+      '........................',
+      '....*..............*....',
+      '..======..........======',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Tower of Clouds',
+    worldId: 'sky',
+    // Vertical climb up cloud-platform tiers to a high goal. Stars
+    // mark each landing, the feather sits near the top.
+    rows: [
+      '...........G............',
+      '.........======.........',
+      '........................',
+      '..+.....................',
+      '....======..............',
+      '........................',
+      '...........*............',
+      '.........======.........',
+      '........................',
+      '..*.....................',
+      '....======..............',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Garden Stroll',
+    worldId: 'fairy',
+    // Gentle tutorial for Fairy Garden. One leaf platform, a pixie
+    // dust mote, a jewel petal, no enemy. Welcoming and gentle.
+    rows: [
+      '........................',
+      '........................',
+      '........................',
+      '..........+.............',
+      '........======..........',
+      '........................',
+      '........................',
+      '....*...................',
+      '..======................',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Pollen Trail',
+    worldId: 'fairy',
+    // A trail of pixie dust motes along a winding leaf path. One bee
+    // patrols the upper section. Jewel petal hidden at the top.
+    rows: [
+      '........................',
+      '..........+.............',
+      '........======..........',
+      '........................',
+      '....*.........*.........',
+      '..======....======......',
+      '..............W.........',
+      '...........========.....',
+      '..*.....................',
+      '======..................',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################'
+    ]
+  },
+  {
+    name: 'Thorn Path',
+    worldId: 'fairy',
+    // Introduces thorny pink vines as spikes. Leaf platforms float
+    // above them as a safer high route.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '........................',
+      '....*.........*.........',
+      '..======....======......',
+      '........................',
+      '........................',
+      '.S....................G.',
+      '===...====...====...====',
+      '...XXX....XXX....XXX....',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Bee Meadow',
+    worldId: 'fairy',
+    // Two friendly bees patrol two leaf platforms. Jewel petals and
+    // pixie dust scattered. She can choose the lower or upper path.
+    rows: [
+      '........................',
+      '........................',
+      '...........+............',
+      '.........======.........',
+      '....*..........*........',
+      '...W............W.......',
+      '.=======......=======...',
+      '........................',
+      '......======......======',
+      '........................',
+      '.S....................G.',
+      '========================',
+      '########################',
+      '########################'
+    ]
+  },
+  {
+    name: 'Flower Tower',
+    worldId: 'fairy',
+    // Climb to a magical flower goal at the top of the garden. Each
+    // tier has a collectible to mark progress.
+    rows: [
+      '..G.....................',
+      '======..................',
+      '........................',
+      '...*....................',
+      '......======............',
+      '..+.....................',
+      '..======................',
+      '........................',
+      '...........*............',
+      '........======..........',
+      '........................',
+      '.S......................',
+      '========================',
+      '########################'
+    ]
+  }
+];
+
+// ---------- Settings & persistence ----------
+const DEFAULT_SETTINGS = {
+  character: 'bunny',
+  sound: true,
+  touch: true,
+  enemyId: 'world'  // 'world' = use whichever world's built-in enemy; else custom enemy id
+};
+const DEFAULT_PROGRESS = { completed: [] }; // level indices completed
+
+let settings = loadJSON('littlehop.settings', DEFAULT_SETTINGS);
+let progress = loadJSON('littlehop.progress', DEFAULT_PROGRESS);
+// migrate any missing fields
+settings = { ...DEFAULT_SETTINGS, ...settings };
+progress = { ...DEFAULT_PROGRESS, ...progress };
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return JSON.parse(JSON.stringify(fallback));
+}
+function saveJSON(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+}
+function saveSettings() { saveJSON('littlehop.settings', settings); }
+function saveProgress() { saveJSON('littlehop.progress', progress); }
+
+// ---------- Audio (synthesized — no asset loading) ----------
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { return null; }
+  }
+  return audioCtx;
+}
+function beep({ freq = 440, dur = 0.1, type = 'sine', gain = 0.15, sweep = 0 }) {
+  if (!settings.sound) return;
+  const ctx = getAudio();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, ctx.currentTime);
+  if (sweep) osc.frequency.linearRampToValueAtTime(freq + sweep, ctx.currentTime + dur);
+  g.gain.setValueAtTime(gain, ctx.currentTime);
+  // Exponential ramp to a tiny non-zero value (Web Audio API can't ramp to
+  // exactly 0). Then snap to absolute zero at stop time — on iOS Safari,
+  // leaving a residual amplitude on the destination bus can produce an
+  // audible drone made of overlapping tail-ends from prior SFX calls.
+  const stopTime = ctx.currentTime + dur;
+  g.gain.exponentialRampToValueAtTime(0.001, stopTime);
+  g.gain.setValueAtTime(0, stopTime);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start();
+  osc.stop(stopTime);
+  // Disconnect the gain node after the oscillator stops so it's eligible
+  // for GC and can't keep the audio graph "warm" with residual amplitude.
+  osc.onended = () => {
+    try { g.disconnect(); } catch (e) {}
+  };
+}
+const SFX = {
+  jump:    () => beep({ freq: 380, dur: 0.12, type: 'square', sweep: 200, gain: 0.08 }),
+  land:    () => beep({ freq: 180, dur: 0.06, type: 'sine', gain: 0.06 }),
+  coin:    () => {
+    beep({ freq: 880, dur: 0.08, type: 'square', gain: 0.1 });
+    setTimeout(() => beep({ freq: 1320, dur: 0.12, type: 'square', gain: 0.1 }), 60);
+  },
+  hurt:    () => beep({ freq: 200, dur: 0.25, type: 'sawtooth', sweep: -120, gain: 0.12 }),
+  bounce:  () => beep({ freq: 220, dur: 0.18, type: 'sine', sweep: -80, gain: 0.1 }),
+  win:     () => {
+    [523, 659, 784, 1047].forEach((f, i) => {
+      setTimeout(() => beep({ freq: f, dur: 0.18, type: 'square', gain: 0.1 }), i * 110);
+    });
+  }
+};
+
+// ---------- Game state ----------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let view = 'title'; // 'title' | 'playing'
+let world = null;   // current level state
+let input = { left: false, right: false, jump: false, jumpPressed: false };
+
+// ---------- View transitions ----------
+function showTitle() {
+  view = 'title';
+  applyWorld(DEFAULT_WORLD_ID);  // title screen always shows the brand palette
+  document.getElementById('titleScreen').classList.remove('hidden');
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('touchControls').style.display = 'none';
+  document.getElementById('editorView').classList.add('hidden');
+}
+function startGame(levelIdx) {
+  view = 'playing';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('editorView').classList.add('hidden');
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('touchControls').style.display = settings.touch ? 'flex' : 'none';
+  loadLevel(levelIdx);
+  // Resume audio on user gesture (iOS requirement)
+  const ac = getAudio();
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+
+// ---------- Level loading ----------
+function loadLevel(idx) {
+  loadLevelDef(LEVELS[idx]);
+  world.source = { type: 'builtin', idx };
+}
+
+// Loads a level from a definition object {name, rows, worldId?}. Sets up
+// world state. source is set later by the caller (loadLevel / playUserLevel
+// / testLevel). worldId defaults to meadow for back-compat with any level
+// saved before step 3.
+function loadLevelDef(def) {
+  const rows = def.rows;
+  const h = rows.length;
+  const w = rows[0].length;
+
+  // Resolve worldId — fall back to default if missing or unknown so that
+  // saved levels from before the worldId field existed still load cleanly.
+  const worldId = (def.worldId && WORLDS[def.worldId]) ? def.worldId : DEFAULT_WORLD_ID;
+  applyWorld(worldId);
+
+  // Parse tiles and find special cells
+  const tiles = [];
+  let startX = 1, startY = 1;
+  let goalX = w - 2, goalY = h - 2;
+  const stars = [];
+  const enemies = [];
+
+  for (let y = 0; y < h; y++) {
+    const row = [];
+    for (let x = 0; x < w; x++) {
+      const ch = rows[y][x] || '.';
+      if (ch === TILE.START) { startX = x; startY = y; row.push(TILE.EMPTY); }
+      else if (ch === TILE.GOAL) { goalX = x; goalY = y; row.push(TILE.EMPTY); }
+      else if (ch === TILE.STAR) {
+        // Collectible A (star/rainbow/etc — varies by world).
+        stars.push({ x, y, collected: false, bob: Math.random() * Math.PI * 2, kind: 'A' });
+        row.push(TILE.EMPTY);
+      }
+      else if (ch === TILE.COLLECT_B) {
+        // Collectible B (flower/gem/etc). Same array as A — mechanics
+        // are identical, only the draw function differs by kind.
+        stars.push({ x, y, collected: false, bob: Math.random() * Math.PI * 2, kind: 'B' });
+        row.push(TILE.EMPTY);
+      }
+      else if (ch === TILE.ENEMY) {
+        // Enemy patrols whatever solid floor it stands on. We auto-detect
+        // the patrol range by walking left and right from the spawn cell
+        // until the floor stops being solid OR something blocks our row.
+        // If there's no floor at all (enemy placed mid-air), it stays put.
+        let pl = x, pr = x;
+        const groundY = y + 1;
+        if (groundY < h && SOLID.has(rows[groundY][x])) {
+          while (pl > 0 &&
+                 SOLID.has(rows[groundY][pl - 1]) &&
+                 rows[y][pl - 1] === '.') pl--;
+          while (pr < w - 1 &&
+                 SOLID.has(rows[groundY][pr + 1]) &&
+                 rows[y][pr + 1] === '.') pr++;
+        }
+        enemies.push({
+          x: x + 0.5, y: y + 1,           // x = centre; y = feet position
+          minX: pl + 0.5, maxX: pr + 0.5,
+          dir: 1,
+          speed: 2.0                       // tiles per second
+        });
+        row.push(TILE.EMPTY);
+      }
+      else row.push(ch);
+    }
+    tiles.push(row);
+  }
+
+  const char = getCharacter(settings.character);
+
+  world = {
+    name: def.name,
+    worldId,            // resolved active world for this level
+    w, h,
+    tiles,
+    stars,
+    starsCollected: 0,
+    starsTotal: stars.length,
+    enemies,            // enemy patrol records (snail/wolf/custom PNG — same shape)
+    goal: { x: goalX, y: goalY },
+    player: {
+      x: (startX + 0.5),  // in tile units
+      y: (startY + 0.5),
+      vx: 0, vy: 0,
+      w: 0.7, h: 0.85,    // smaller hitbox than a tile
+      onGround: false,
+      facing: 1,
+      char,
+      squash: 0, // visual squash on land
+      stretch: 0, // visual stretch on jump
+      bounceCooldown: 0   // brief invuln after an enemy bounce
+    },
+    checkpoint: { x: startX + 0.5, y: startY + 0.5 },
+    spawn: { x: startX + 0.5, y: startY + 0.5 },
+    camera: { x: 0, y: 0 },
+    particles: [],
+    won: false,
+    timeStart: performance.now(),
+    flagWave: 0,
+    source: null  // set by caller
+  };
+
+  updateHUD();
+  resizeCanvas();
+}
+
+// ---------- Physics ----------
+// Max jump height (in tiles) = JUMP_VEL^2 / (2 * GRAVITY).
+// With v=22, g=50 -> 4.84 tiles. Keep level vertical gaps <= 4 (with margin).
+const GRAVITY = 50;        // tiles/sec^2
+const MOVE_SPEED = 7;      // tiles/sec
+const JUMP_VEL = 22;       // tiles/sec (initial upward) -> ~4.8-tile max jump
+const MAX_FALL = 25;
+const COYOTE = 0.12;       // sec after leaving ground you can still jump
+const JUMP_BUFFER = 0.12;  // sec before landing where pressing jump still works
+
+// ---------- Speed settings ----------
+// We slow the whole world by scaling dt before passing it to physics.
+// This keeps the game internally consistent — jump height, fall rate, walk
+// speed all scale together — so levels stay solvable at every speed.
+// Mathematically: at scale 0.5, every physics integration step uses half
+// the dt, so gravity has half the effect per unit real time, jump velocity
+// covers half the distance per unit real time, but the *ratio* of jump
+// height to gravity stays the same. Net effect: slow-motion playback.
+// COYOTE and JUMP_BUFFER scale too, which is correct: forgiveness windows
+// feel the same in real time at slow speeds (they just take longer in
+// wall-clock terms relative to the slowed world).
+const SPEEDS = [
+  { id: 'tortoise',  scale: 0.50, emoji: '🐢', name: 'Tortoise' },
+  { id: 'snail',     scale: 0.60, emoji: '🐌', name: 'Slow' },
+  { id: 'duckling',  scale: 0.70, emoji: '🦆', name: 'Gentle' },
+  { id: 'kitten',    scale: 0.80, emoji: '🐱', name: 'Steady' },
+  { id: 'pup',       scale: 0.90, emoji: '🐶', name: 'Brisk' },
+  { id: 'bunny',     scale: 1.00, emoji: '🐰', name: 'Bunny' },     // original Little Hop speed
+  { id: 'lightning', scale: 1.15, emoji: '⚡', name: 'Zoomy' }
+];
+const DEFAULT_SPEED_ID = 'duckling';  // gentle starting speed per Pass 1 brief
+
+function loadSpeedId() {
+  try {
+    const v = localStorage.getItem('littlehop.speed');
+    if (v && SPEEDS.find(s => s.id === v)) return v;
+  } catch (e) {}
+  return DEFAULT_SPEED_ID;
+}
+function saveSpeedId(id) {
+  try { localStorage.setItem('littlehop.speed', id); } catch (e) {}
+}
+let speedId = loadSpeedId();
+function getSpeed() {
+  return SPEEDS.find(s => s.id === speedId) || SPEEDS.find(s => s.id === DEFAULT_SPEED_ID);
+}
+
+let coyoteTimer = 0;
+let jumpBufferTimer = 0;
+let lastTime = 0;
+
+function tileAt(tx, ty) {
+  if (tx < 0 || tx >= world.w || ty < 0 || ty >= world.h) return TILE.EMPTY;
+  return world.tiles[ty][tx];
+}
+function isSolid(tx, ty) {
+  return SOLID.has(tileAt(tx, ty));
+}
+function isDanger(tx, ty) {
+  return tileAt(tx, ty) === TILE.DANGER;
+}
+
+function update(dt) {
+  if (!world || world.won) return;
+  const p = world.player;
+
+  // Horizontal input
+  let ax = 0;
+  if (input.left) ax -= 1;
+  if (input.right) ax += 1;
+  // Accelerate toward target speed, decelerate when no input (snappier feel)
+  const target = ax * MOVE_SPEED;
+  const accel = ax !== 0 ? 60 : 80;
+  if (p.vx < target) p.vx = Math.min(target, p.vx + accel * dt);
+  else if (p.vx > target) p.vx = Math.max(target, p.vx - accel * dt);
+  if (ax !== 0) p.facing = ax;
+
+  // Jump handling: coyote time + jump buffering = forgiving for kids
+  if (p.onGround) coyoteTimer = COYOTE;
+  else coyoteTimer = Math.max(0, coyoteTimer - dt);
+
+  if (input.jumpPressed) {
+    jumpBufferTimer = JUMP_BUFFER;
+    input.jumpPressed = false;
+  } else {
+    jumpBufferTimer = Math.max(0, jumpBufferTimer - dt);
+  }
+
+  if (jumpBufferTimer > 0 && coyoteTimer > 0) {
+    p.vy = -JUMP_VEL;
+    p.onGround = false;
+    coyoteTimer = 0;
+    jumpBufferTimer = 0;
+    p.stretch = 1;
+    SFX.jump();
+  }
+
+  // Every jump is full height — easier for a 5yo than variable jumps
+  // (which require holding the button longer for higher jumps).
+
+  // Gravity — but only when we're going to integrate y this frame.
+  // (Skipped when standing still on ground; see below.)
+  p.vy = Math.min(MAX_FALL, p.vy + GRAVITY * dt);
+
+  // ----- Move & collide (axis-separated, tile-based AABB) -----
+  // X axis
+  p.x += p.vx * dt;
+  collide('x');
+  // Y axis.
+  // If she's standing on solid ground AND not jumping, skip y-integration
+  // entirely. Without this, at slow speeds the small dt produced sub-pixel
+  // y-oscillation (gravity pulls down ~0.003 tiles, collision pushes back
+  // up) which (a) made PNG sprites shimmer visibly and (b) at certain dt
+  // values crossed the floor tile boundary often enough to repeatedly
+  // trigger SFX.land, producing the reported audio drone.
+  //
+  // "Standing still" means: she was on the ground last frame, she's not
+  // moving up (vy >= 0 means falling or stationary), AND there's still a
+  // solid tile directly beneath her feet (she hasn't walked off a ledge).
+  const wasOnGround = p.onGround;
+  const feetTileX = Math.floor(p.x);
+  const feetTileY = Math.floor(p.y + 0.001);  // tile just below her feet
+  const groundedAhead = isSolid(feetTileX, feetTileY) ||
+                        isSolid(Math.floor(p.x - p.w / 2 + 0.001), feetTileY) ||
+                        isSolid(Math.floor(p.x + p.w / 2 - 0.001), feetTileY);
+  const standingStill = wasOnGround && p.vy >= 0 && groundedAhead;
+  if (standingStill) {
+    p.vy = 0;
+    // onGround remains true.
+  } else {
+    p.y += p.vy * dt;
+    p.onGround = false;
+    collide('y');
+    if (p.onGround && !wasOnGround) {
+      p.squash = 1;
+      SFX.land();
+      // Save checkpoint when landing on solid ground
+      world.checkpoint = { x: Math.floor(p.x) + 0.5, y: p.y };
+    }
+  }
+
+  // Damp visual squash/stretch
+  p.squash *= Math.pow(0.001, dt);
+  p.stretch *= Math.pow(0.001, dt);
+  p.bounceCooldown = Math.max(0, p.bounceCooldown - dt);
+
+  // ----- Enemies — pace back and forth, bounce the player on touch -----
+  // No death on contact: bouncing back is enough friction for a 5yo. The
+  // brief 0.5s cooldown stops the player from getting pinball-stuck if she
+  // stays inside the enemy's box.
+  for (const en of world.enemies) {
+    en.x += en.dir * en.speed * dt;
+    if (en.x <= en.minX) { en.x = en.minX; en.dir = 1; }
+    if (en.x >= en.maxX) { en.x = en.maxX; en.dir = -1; }
+    if (p.bounceCooldown <= 0) {
+      const dx = p.x - en.x;
+      const dy = (p.y - p.h / 2) - (en.y - 0.5);  // enemy centre ≈ 0.5 above feet
+      if (Math.abs(dx) < 0.8 && Math.abs(dy) < 0.9) {
+        SFX.bounce();
+        p.vx = (dx >= 0 ? 1 : -1) * 9;  // horizontal nudge away
+        p.vy = -10;                      // small hop
+        p.bounceCooldown = 0.5;
+        // Sparkle particles for feedback
+        for (let i = 0; i < 8; i++) {
+          world.particles.push({
+            x: p.x, y: p.y - p.h / 2,
+            vx: (Math.random() - 0.5) * 6,
+            vy: -Math.random() * 6 - 1,
+            life: 0.5, maxLife: 0.5,
+            color: '#FFD24D', size: 0.15
+          });
+        }
+      }
+    }
+  }
+
+  // ----- Collectibles -----
+  for (const s of world.stars) {
+    if (s.collected) continue;
+    s.bob += dt * 4;
+    if (Math.abs(p.x - (s.x + 0.5)) < 0.6 && Math.abs(p.y - (s.y + 0.5)) < 0.6) {
+      s.collected = true;
+      world.starsCollected++;
+      SFX.coin();
+      // Particle puff — color matches the collectible type so flowers/
+      // gems pop pink/purple instead of always the star's yellow.
+      const puffColor = (s.kind === 'B') ? '#FF8FA3' : '#FFD24D';
+      for (let i = 0; i < 8; i++) {
+        world.particles.push({
+          x: s.x + 0.5, y: s.y + 0.5,
+          vx: (Math.random() - 0.5) * 6,
+          vy: -Math.random() * 8 - 2,
+          life: 0.6, maxLife: 0.6,
+          color: puffColor, size: 0.15
+        });
+      }
+      updateHUD();
+    }
+  }
+
+  // ----- Danger check -----
+  // Only trigger when feet are actually IN a danger tile, not when standing
+  // adjacent to one. Previous version checked py+1, which killed the player
+  // the moment her center column passed over a spike pit (before falling).
+  const px = Math.floor(p.x);
+  const py = Math.floor(p.y);
+  if (isDanger(px, py) || p.y > world.h + 2) {
+    respawn();
+  }
+
+  // ----- Goal check -----
+  if (Math.abs(p.x - (world.goal.x + 0.5)) < 0.6 && Math.abs(p.y - (world.goal.y + 0.5)) < 0.7) {
+    winLevel();
+  }
+
+  // ----- Particles -----
+  for (const pt of world.particles) {
+    pt.x += pt.vx * dt;
+    pt.y += pt.vy * dt;
+    pt.vy += GRAVITY * dt * 0.4;
+    pt.life -= dt;
+  }
+  world.particles = world.particles.filter(pt => pt.life > 0);
+
+  // ----- Camera (smoothly follow player) -----
+  const cam = world.camera;
+  const targetCamX = p.x - viewportTilesW() / 2;
+  const targetCamY = p.y - viewportTilesH() / 2;
+  cam.x += (targetCamX - cam.x) * Math.min(1, dt * 6);
+  cam.y += (targetCamY - cam.y) * Math.min(1, dt * 6);
+  // Clamp camera to level bounds
+  cam.x = Math.max(0, Math.min(world.w - viewportTilesW(), cam.x));
+  cam.y = Math.max(0, Math.min(world.h - viewportTilesH(), cam.y));
+
+  world.flagWave += dt * 6;
+}
+
+function collide(axis) {
+  const p = world.player;
+  // Player AABB in tile coords (centered on x, bottom at y)
+  const left = p.x - p.w / 2;
+  const right = p.x + p.w / 2;
+  const top = p.y - p.h;
+  const bottom = p.y;
+
+  const minTX = Math.floor(left);
+  const maxTX = Math.floor(right - 0.001);
+  const minTY = Math.floor(top);
+  const maxTY = Math.floor(bottom - 0.001);
+
+  for (let ty = minTY; ty <= maxTY; ty++) {
+    for (let tx = minTX; tx <= maxTX; tx++) {
+      if (!isSolid(tx, ty)) continue;
+      if (axis === 'x') {
+        if (p.vx > 0) { p.x = tx - p.w / 2 - 0.001; p.vx = 0; }
+        else if (p.vx < 0) { p.x = tx + 1 + p.w / 2 + 0.001; p.vx = 0; }
+      } else {
+        if (p.vy > 0) { p.y = ty - 0.001; p.vy = 0; p.onGround = true; }
+        else if (p.vy < 0) { p.y = ty + 1 + p.h + 0.001; p.vy = 0; }
+      }
+    }
+  }
+}
+
+function respawn() {
+  SFX.hurt();
+  const p = world.player;
+  // Particle burst
+  for (let i = 0; i < 12; i++) {
+    world.particles.push({
+      x: p.x, y: p.y - p.h / 2,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 0.5) * 8 - 2,
+      life: 0.5, maxLife: 0.5,
+      color: '#FF6B6B', size: 0.18
+    });
+  }
+  // Teleport back to checkpoint
+  p.x = world.checkpoint.x;
+  p.y = world.checkpoint.y;
+  p.vx = 0; p.vy = 0;
+}
+
+function winLevel() {
+  if (world.won) return;
+  world.won = true;
+  SFX.win();
+  // Confetti
+  for (let i = 0; i < 50; i++) {
+    world.particles.push({
+      x: world.goal.x + 0.5, y: world.goal.y + 0.5,
+      vx: (Math.random() - 0.5) * 10,
+      vy: -Math.random() * 12 - 2,
+      life: 1.5, maxLife: 1.5,
+      color: ['#FF8FA3', '#FFD24D', '#7DB0FF', '#9DE36C', '#D188FF'][Math.floor(Math.random() * 5)],
+      size: 0.18
+    });
+  }
+  // Only mark BUILT-IN levels as completed (user levels don't track progress)
+  if (world.source && world.source.type === 'builtin') {
+    if (!progress.completed.includes(world.source.idx)) {
+      progress.completed.push(world.source.idx);
+      saveProgress();
+    }
+  }
+  setTimeout(() => {
+    document.getElementById('winTitle').textContent = 'Level Complete!';
+    document.getElementById('winSub').textContent =
+      `${world.starsCollected}/${world.starsTotal} collected`;
+    // Next button label depends on where this level came from
+    const src = world.source;
+    let nextLabel = 'Replay';
+    if (src && src.type === 'builtin' && src.idx < LEVELS.length - 1) nextLabel = 'Next ▶';
+    else if (src && src.type === 'test') nextLabel = 'Back to Editor';
+    else if (src && src.type === 'user') nextLabel = 'Replay';
+    document.getElementById('winNextBtn').textContent = nextLabel;
+    // Hide "Levels" button when testing — it would whisk her out of the editor flow
+    document.getElementById('winLevelsBtn').style.display =
+      (src && src.type === 'test') ? 'none' : '';
+    document.getElementById('winOverlay').classList.add('open');
+  }, 700);
+}
+
+// ---------- Rendering ----------
+function viewportTilesW() { return canvas.width / dpr / tileSize; }
+function viewportTilesH() { return canvas.height / dpr / tileSize; }
+
+let tileSize = 40;
+let dpr = 1;
+
+function resizeCanvas() {
+  dpr = window.devicePixelRatio || 1;
+  const wrap = document.querySelector('.game-wrap');
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Tile size: fit world height ideally, with min/max
+  if (world) {
+    const fitH = h / world.h;
+    const fitW = w / Math.min(world.w, 14); // show at least 14 wide
+    tileSize = Math.max(28, Math.min(fitH, fitW, 64));
+  }
+}
+
+function draw() {
+  if (!world) return;
+  const w = canvas.width / dpr;
+  const h = canvas.height / dpr;
+  const wd = getCurrentWorld();
+
+  // Background (sky + parallax atmosphere — clouds in meadow, etc.)
+  wd.drawBackground(ctx, w, h, world);
+
+  // World offset from camera
+  const camX = world.camera.x * tileSize;
+  const camY = world.camera.y * tileSize;
+
+  // ----- Tiles -----
+  const startX = Math.max(0, Math.floor(world.camera.x));
+  const endX = Math.min(world.w, Math.ceil(world.camera.x + viewportTilesW()) + 1);
+  const startY = Math.max(0, Math.floor(world.camera.y));
+  const endY = Math.min(world.h, Math.ceil(world.camera.y + viewportTilesH()) + 1);
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const t = world.tiles[y][x];
+      const sx = x * tileSize - camX;
+      const sy = y * tileSize - camY;
+      drawTile(t, sx, sy, x, y);
+    }
+  }
+
+  // ----- Collectibles (A and B mixed in the same array) -----
+  for (const s of world.stars) {
+    if (s.collected) continue;
+    const sx = (s.x + 0.5) * tileSize - camX;
+    const sy = (s.y + 0.5) * tileSize - camY + Math.sin(s.bob) * 4;
+    const drawer = (s.kind === 'B') ? wd.collectibleB : wd.collectibleA;
+    drawer.draw(ctx, sx, sy, tileSize, s.bob);
+  }
+
+  // ----- Goal flag -----
+  const gx = (world.goal.x + 0.5) * tileSize - camX;
+  const gy = (world.goal.y + 1) * tileSize - camY;
+  const wave = Math.sin(world.flagWave) * 4;
+  wd.drawGoal(ctx, gx, gy, tileSize, wave);
+
+  // ----- Enemies -----
+  for (const en of world.enemies) {
+    drawEnemy(en, camX, camY, wd);
+  }
+
+  // ----- Player -----
+  drawPlayer(camX, camY);
+
+  // ----- Particles -----
+  for (const p of world.particles) {
+    const sx = p.x * tileSize - camX;
+    const sy = p.y * tileSize - camY;
+    const alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    const size = p.size * tileSize;
+    ctx.fillRect(sx - size / 2, sy - size / 2, size, size);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Game-canvas wrapper around the canonical drawTileInto (shared with editor).
+function drawTile(t, sx, sy, tx, ty) {
+  drawTileInto(ctx, t, sx, sy, tx, ty, tileSize);
+}
+
+function drawPlayer(camX, camY) {
+  const p = world.player;
+  const sx = p.x * tileSize - camX;
+  const sy = (p.y - p.h / 2) * tileSize - camY;
+
+  // Squash/stretch
+  const squash = 1 - p.squash * 0.3;
+  const stretch = 1 + p.stretch * 0.2;
+
+  // Facing math: emoji characters and PNGs with defaultFacing=1 flip the
+  // same way — if p.facing matches the source orientation, draw natural;
+  // otherwise mirror. defaultFacing defaults to 1 since most sprites face
+  // right and built-in emojis are symmetric enough that it doesn't matter.
+  const defaultFacing = p.char.defaultFacing || 1;
+  const sign = (p.facing * defaultFacing > 0) ? 1 : -1;
+  const scaleX = (1 / squash) * sign;
+  const scaleY = stretch;
+
+  // Subtle ground shadow — drawn before the player so the player overlaps it.
+  // Snapped to integer pixels for the same reason as the player translate.
+  if (p.onGround) {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(Math.round(sx), Math.round((p.y) * tileSize - camY - 2), tileSize * 0.35, tileSize * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  // Pixel-snap the translate so PNG sprites don't shimmer on sub-pixel
+  // positions. The integration loop can leave p.y oscillating by a fraction
+  // of a pixel between frames (gravity nudges it down, collision pushes it
+  // back), which is invisible on emojis (font hinting hides it) but causes
+  // a noticeable jitter on bitmap PNGs with bilinear scaling.
+  ctx.translate(Math.round(sx), Math.round(sy));
+  ctx.scale(scaleX, scaleY);
+  if (p.char.image) {
+    // Custom PNG character. Drawn a touch larger than a tile for presence.
+    const img = getCharImage(p.char);
+    if (img && img.complete && img.naturalWidth > 0) {
+      const drawSize = tileSize * 1.2;
+      const aspect = img.naturalWidth / img.naturalHeight;
+      const drawW = drawSize * aspect;
+      const drawH = drawSize;
+      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+    } else {
+      // Image not ready yet — show a placeholder circle so the player is
+      // still locatable on the canvas while the image decodes.
+      ctx.fillStyle = '#A87DF0';
+      ctx.beginPath();
+      ctx.arc(0, 0, tileSize * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    // Built-in emoji character
+    ctx.font = `${tileSize * 0.95}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.char.emoji, 0, 0);
+  }
+  ctx.restore();
+}
+
+// Renders one patrolling enemy. Dispatches between the active world's
+// built-in enemy art and a user-imported PNG based on settings.enemyId.
+function drawEnemy(en, camX, camY, wd) {
+  const sx = en.x * tileSize - camX;
+  const sy = en.y * tileSize - camY;
+  const facing = en.dir;
+  const choice = getActiveEnemyChoice();
+  if (choice === 'world') {
+    // World's built-in enemy draws itself at (sx, sy) = feet position.
+    wd.enemy.draw(ctx, sx, sy, tileSize, facing);
+    return;
+  }
+  // Custom PNG enemy. Draw centred a bit above feet, same scaling pattern
+  // as the player so squashed-down photos still feel like sprites.
+  const img = getEnemyImage(choice);
+  const defaultFacing = choice.defaultFacing || 1;
+  const sign = (facing * defaultFacing > 0) ? 1 : -1;
+  ctx.save();
+  ctx.translate(sx, sy - tileSize * 0.4);
+  ctx.scale(sign, 1);
+  if (img && img.complete && img.naturalWidth > 0) {
+    const drawSize = tileSize * 1.1;
+    const aspect = img.naturalWidth / img.naturalHeight;
+    const drawW = drawSize * aspect;
+    const drawH = drawSize;
+    ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+  } else {
+    // Placeholder while loading
+    ctx.fillStyle = '#6B6B7D';
+    ctx.beginPath();
+    ctx.arc(0, 0, tileSize * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function getCSS(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// ---------- Main loop ----------
+function loop(now) {
+  if (!lastTime) lastTime = now;
+  const rawDt = Math.min(0.05, (now - lastTime) / 1000); // cap dt to avoid tunneling
+  lastTime = now;
+  // Scale dt by chosen speed — slows or speeds the whole world together.
+  const dt = rawDt * getSpeed().scale;
+  if (view === 'playing' || view === 'testing') {
+    update(dt);
+    draw();
+  } else if (view === 'editor') {
+    drawEditor();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- Input ----------
+const KEY_DOWN_MAP = {
+  ArrowLeft: 'left', a: 'left', A: 'left',
+  ArrowRight: 'right', d: 'right', D: 'right',
+  ArrowUp: 'jump', w: 'jump', W: 'jump', ' ': 'jump'
+};
+window.addEventListener('keydown', e => {
+  const k = KEY_DOWN_MAP[e.key];
+  if (k) {
+    e.preventDefault();
+    if (!input[k]) {
+      input[k] = true;
+      if (k === 'jump') input.jumpPressed = true;
+    }
+  }
+});
+window.addEventListener('keyup', e => {
+  const k = KEY_DOWN_MAP[e.key];
+  if (k) { e.preventDefault(); input[k] = false; }
+});
+
+// Touch buttons
+document.querySelectorAll('.touch-btn').forEach(btn => {
+  const key = btn.dataset.key;
+  const press = e => {
+    e.preventDefault();
+    btn.classList.add('pressed');
+    input[key] = true;
+    if (key === 'jump') input.jumpPressed = true;
+  };
+  const release = e => {
+    e.preventDefault();
+    btn.classList.remove('pressed');
+    input[key] = false;
+  };
+  btn.addEventListener('touchstart', press, { passive: false });
+  btn.addEventListener('touchend', release);
+  btn.addEventListener('touchcancel', release);
+  btn.addEventListener('mousedown', press);
+  btn.addEventListener('mouseup', release);
+  btn.addEventListener('mouseleave', release);
+});
+
+// ---------- HUD updates ----------
+function updateHUD() {
+  if (!world) return;
+  document.getElementById('coinsCount').textContent =
+    `${world.starsCollected}/${world.starsTotal}`;
+}
+
+// ---------- UI: panels ----------
+const scrim = document.getElementById('scrim');
+function openPanel(id) {
+  document.getElementById(id).classList.add('open');
+  scrim.classList.add('open');
+}
+function closeAllPanels() {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('open'));
+  scrim.classList.remove('open');
+}
+scrim.addEventListener('click', closeAllPanels);
+
+// Title screen buttons
+document.getElementById('playBtn').addEventListener('click', () => {
+  buildLevelsGrid();
+  openPanel('levelsPanel');
+});
+document.getElementById('charBtn').addEventListener('click', () => {
+  buildCharChips();
+  openPanel('settingsPanel');
+});
+
+// HUD buttons
+document.getElementById('backBtn').addEventListener('click', () => {
+  // If we came from the editor, go back there. Otherwise, title.
+  if (world && world.source && world.source.type === 'test') {
+    showEditor();
+  } else {
+    showTitle();
+  }
+});
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  buildCharChips();
+  openPanel('settingsPanel');
+});
+document.getElementById('closeSettingsBtn').addEventListener('click', closeAllPanels);
+
+// ---------- Levels grid ----------
+function buildLevelsGrid() {
+  const grid = document.getElementById('levelsGrid');
+  grid.innerHTML = '';
+
+  // ---- Built-in levels ----
+  // Group by world so the picker stays scannable as the level count grows.
+  // Within each world the levels appear in the order they're declared in
+  // the LEVELS array (which is also their progression order).
+  const builtinLabel = document.createElement('div');
+  builtinLabel.className = 'section-label';
+  builtinLabel.style.gridColumn = '1 / -1';
+  builtinLabel.textContent = 'Built-in';
+  grid.appendChild(builtinLabel);
+
+  // Bucket levels by worldId, preserving original index so the gameplay
+  // engine still receives the absolute index when she taps a card.
+  const buckets = new Map();  // worldId -> array of {lvl, idx}
+  LEVELS.forEach((lvl, idx) => {
+    const wid = lvl.worldId || DEFAULT_WORLD_ID;
+    if (!buckets.has(wid)) buckets.set(wid, []);
+    buckets.get(wid).push({ lvl, idx });
+  });
+
+  // Render each world's bucket in WORLDS-registry order (so worlds appear
+  // in a consistent sequence regardless of LEVELS array shuffling).
+  for (const wid of Object.keys(WORLDS)) {
+    const bucket = buckets.get(wid);
+    if (!bucket || bucket.length === 0) continue;
+    const wd = WORLDS[wid];
+    const worldLabel = document.createElement('div');
+    worldLabel.className = 'section-label';
+    worldLabel.style.gridColumn = '1 / -1';
+    worldLabel.style.marginTop = '14px';
+    worldLabel.style.opacity = '0.7';
+    worldLabel.textContent = `${wd.emoji} ${wd.name}`;
+    grid.appendChild(worldLabel);
+
+    bucket.forEach(({ lvl, idx }) => {
+      const completed = progress.completed.includes(idx);
+      const card = document.createElement('div');
+      card.className = 'level-card' + (completed ? ' completed' : '');
+      // Show the level's position within its world (1, 2, 3...) rather
+      // than its absolute index — feels more natural for a 5yo.
+      const numInWorld = bucket.findIndex(b => b.idx === idx) + 1;
+      card.innerHTML = `
+        <div class="level-card-num">${numInWorld}</div>
+        <div class="level-card-name">${lvl.name}</div>
+        <div class="level-card-star">${completed ? '⭐' : ''}</div>
+      `;
+      card.addEventListener('click', () => {
+        closeAllPanels();
+        startGame(idx);
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  // ---- User levels ----
+  const myLabel = document.createElement('div');
+  myLabel.className = 'section-label';
+  myLabel.style.gridColumn = '1 / -1';
+  myLabel.textContent = userLevels.length ? 'My Levels' : 'My Levels (none yet — tap "Make a Level" on the home screen!)';
+  grid.appendChild(myLabel);
+
+  userLevels.forEach(lvl => {
+    const card = document.createElement('div');
+    card.className = 'level-card user';
+    card.innerHTML = `
+      <div class="level-card-num">✏️</div>
+      <div class="level-card-name">${escapeHtml(lvl.name)}</div>
+      <div class="level-card-actions">
+        <button data-action="play" title="Play">▶</button>
+        <button data-action="edit" title="Edit">✏️</button>
+        <button class="del" data-action="delete" title="Delete">🗑️</button>
+      </div>
+    `;
+    card.querySelector('[data-action="play"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllPanels();
+      playUserLevel(lvl);
+    });
+    card.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllPanels();
+      editExistingLevel(lvl);
+    });
+    card.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete "${lvl.name}"?`)) {
+        userLevels = userLevels.filter(l => l.id !== lvl.id);
+        saveUserLevels();
+        buildLevelsGrid();
+      }
+    });
+    // Tapping the card body (not buttons) plays
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.level-card-actions')) return;
+      closeAllPanels();
+      playUserLevel(lvl);
+    });
+    grid.appendChild(card);
+  });
+
+  // "+ New Level" card always at the end
+  const newCard = document.createElement('div');
+  newCard.className = 'level-card';
+  newCard.style.borderStyle = 'dashed';
+  newCard.style.borderColor = 'rgba(42, 74, 127, 0.3)';
+  newCard.style.borderWidth = '3px';
+  newCard.innerHTML = `
+    <div class="level-card-num">+</div>
+    <div class="level-card-name">New Level</div>
+    <div class="level-card-star"></div>
+  `;
+  newCard.addEventListener('click', () => {
+    closeAllPanels();
+    prepSizePanel();
+    openPanel('sizePanel');
+  });
+  grid.appendChild(newCard);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+// ---------- Character chips ----------
+function buildCharChips() {
+  const wrap = document.getElementById('charChips');
+  wrap.innerHTML = '';
+
+  // Helper — wires up a chip element with the selection click handler.
+  const wireChip = (chip, charRecord) => {
+    chip.addEventListener('click', (e) => {
+      // Ignore clicks that came from the inline delete button
+      if (e.target.closest('.chip-delete')) return;
+      settings.character = charRecord.id;
+      saveSettings();
+      buildCharChips();
+      // If we're mid-game, swap character live
+      if (world) world.player.char = charRecord;
+    });
+  };
+
+  // ----- Built-in emoji chips -----
+  CHARACTERS.forEach(c => {
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (settings.character === c.id ? ' selected' : '');
+    chip.textContent = c.emoji;
+    chip.title = c.name;
+    wireChip(chip, c);
+    wrap.appendChild(chip);
+  });
+
+  // ----- Custom PNG chips -----
+  customCharacters.forEach(c => {
+    const chip = document.createElement('div');
+    chip.className = 'chip char-png' + (settings.character === c.id ? ' selected' : '');
+    chip.title = c.name;
+    const img = document.createElement('img');
+    img.src = c.image;
+    img.alt = c.name;
+    img.className = 'chip-img';
+    chip.appendChild(img);
+    const del = document.createElement('button');
+    del.className = 'chip-delete';
+    del.textContent = '✕';
+    del.title = 'Delete this character';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete "${c.name}"?`)) return;
+      // If the deleted character was selected, fall back to first built-in.
+      if (settings.character === c.id) {
+        settings.character = CHARACTERS[0].id;
+        saveSettings();
+        if (world) world.player.char = CHARACTERS[0];
+      }
+      customCharacters = customCharacters.filter(x => x.id !== c.id);
+      saveCustomCharacters();
+      delete charImageCache[c.id];
+      buildCharChips();
+    });
+    chip.appendChild(del);
+    wireChip(chip, c);
+    wrap.appendChild(chip);
+  });
+
+  // ----- Import chip (always at the end) -----
+  const importChip = document.createElement('div');
+  importChip.className = 'chip chip-import';
+  importChip.title = 'Import a character';
+  importChip.textContent = '📷 Import';
+  importChip.addEventListener('click', openCharacterImport);
+  wrap.appendChild(importChip);
+
+  // Reflect toggles
+  document.getElementById('soundToggle').classList.toggle('on', settings.sound);
+  document.getElementById('touchToggle').classList.toggle('on', settings.touch);
+  // Enemy and speed pickers live in the same panel; keep them in sync.
+  buildEnemyChips();
+  buildSpeedChips();
+}
+
+// ---------- Enemy chips ----------
+// Renders: a "World default" chip first (shows whichever built-in enemy
+// the active level's world uses), then custom enemy chips with thumbnails
+// and a small ✕ delete corner, then a "📷 Import" chip at the end.
+function buildEnemyChips() {
+  const wrap = document.getElementById('enemyChips');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+
+  const wireSelect = (chip, id) => {
+    chip.addEventListener('click', (e) => {
+      if (e.target.closest('.chip-delete')) return;
+      settings.enemyId = id;
+      saveSettings();
+      buildEnemyChips();
+    });
+  };
+
+  // ----- World-default chip -----
+  // We show this as a generic icon: settings is global, but the actual
+  // built-in changes per level (snail in meadow, wolf in castle).
+  const worldChip = document.createElement('div');
+  worldChip.className = 'chip stacked' + (settings.enemyId === 'world' ? ' selected' : '');
+  worldChip.title = 'Whichever enemy fits the current world';
+  worldChip.innerHTML =
+    `<span class="ch-emoji">🎭</span><span class="ch-name">World default</span>`;
+  wireSelect(worldChip, 'world');
+  wrap.appendChild(worldChip);
+
+  // ----- Custom PNG enemy chips -----
+  customEnemies.forEach(en => {
+    const chip = document.createElement('div');
+    chip.className = 'chip char-png' + (settings.enemyId === en.id ? ' selected' : '');
+    chip.title = en.name;
+    const img = document.createElement('img');
+    img.src = en.image;
+    img.alt = en.name;
+    img.className = 'chip-img';
+    chip.appendChild(img);
+    const del = document.createElement('button');
+    del.className = 'chip-delete';
+    del.textContent = '✕';
+    del.title = 'Delete this enemy';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete "${en.name}"?`)) return;
+      // If the deleted enemy was selected, fall back to the world default.
+      if (settings.enemyId === en.id) {
+        settings.enemyId = 'world';
+        saveSettings();
+      }
+      customEnemies = customEnemies.filter(x => x.id !== en.id);
+      saveCustomEnemies();
+      delete enemyImageCache[en.id];
+      buildEnemyChips();
+    });
+    chip.appendChild(del);
+    wireSelect(chip, en.id);
+    wrap.appendChild(chip);
+  });
+
+  // ----- Import chip -----
+  const importChip = document.createElement('div');
+  importChip.className = 'chip chip-import';
+  importChip.title = 'Import an enemy';
+  importChip.textContent = '📷 Import';
+  importChip.addEventListener('click', openEnemyImport);
+  wrap.appendChild(importChip);
+}
+
+// ---------- Speed chips ----------
+function buildSpeedChips() {
+  const wrap = document.getElementById('speedChips');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  SPEEDS.forEach(s => {
+    const chip = document.createElement('div');
+    chip.className = 'chip stacked' + (s.id === speedId ? ' selected' : '');
+    chip.title = s.name;
+    chip.innerHTML =
+      `<span class="ch-emoji">${s.emoji}</span><span class="ch-name">${s.name}</span>`;
+    chip.addEventListener('click', () => {
+      speedId = s.id;
+      saveSpeedId(s.id);
+      buildSpeedChips();
+    });
+    wrap.appendChild(chip);
+  });
+}
+
+document.getElementById('soundToggle').addEventListener('click', () => {
+  settings.sound = !settings.sound;
+  saveSettings();
+  buildCharChips();
+});
+document.getElementById('touchToggle').addEventListener('click', () => {
+  settings.touch = !settings.touch;
+  saveSettings();
+  buildCharChips();
+  document.getElementById('touchControls').style.display =
+    (view === 'playing' && settings.touch) ? 'flex' : 'none';
+});
+
+// ---------- Win overlay ----------
+document.getElementById('winLevelsBtn').addEventListener('click', () => {
+  document.getElementById('winOverlay').classList.remove('open');
+  showTitle();
+  buildLevelsGrid();
+  openPanel('levelsPanel');
+});
+document.getElementById('winNextBtn').addEventListener('click', () => {
+  document.getElementById('winOverlay').classList.remove('open');
+  const src = world.source;
+  if (src && src.type === 'test') {
+    // Came from the editor — go back to editing
+    showEditor();
+  } else if (src && src.type === 'builtin') {
+    const next = (src.idx + 1) % LEVELS.length;
+    startGame(next);
+  } else if (src && src.type === 'user') {
+    // Replay the same user level
+    playUserLevel(userLevels.find(l => l.id === src.id));
+  } else {
+    // Fallback — just replay
+    if (src && src.type === 'builtin') startGame(src.idx);
+  }
+});
+
+// ===========================================================
+// USER LEVELS — saved to localStorage so they persist between sessions
+// ===========================================================
+let userLevels = loadJSON('littlehop.userLevels', []);
+
+function saveUserLevels() {
+  saveJSON('littlehop.userLevels', userLevels);
+}
+
+function makeLevelId() {
+  return 'lvl_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+}
+
+// ===========================================================
+// PLAYING USER LEVELS — startGame is for built-in; these are for user/test
+// ===========================================================
+function playUserLevel(userLvl) {
+  if (!userLvl) return;
+  view = 'playing';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('editorView').classList.add('hidden');
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('touchControls').style.display = settings.touch ? 'flex' : 'none';
+  loadLevelDef(userLvl);
+  world.source = { type: 'user', id: userLvl.id };
+  const ac = getAudio();
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+
+function testLevel(def) {
+  view = 'testing';
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('editorView').classList.add('hidden');
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('touchControls').style.display = settings.touch ? 'flex' : 'none';
+  loadLevelDef(def);
+  world.source = { type: 'test', def };
+  const ac = getAudio();
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+
+// ===========================================================
+// EDITOR
+// ===========================================================
+const EDITOR_SIZES = {
+  small:  { cols: 16, rows: 10 },
+  medium: { cols: 24, rows: 14 },
+  large:  { cols: 32, rows: 18 }
+};
+
+// Palette items. `tool` is the char placed; `label` is the emoji shown.
+// `kind` is 'tile' (rendered through drawTileInto) or 'icon' (rendered
+// as emoji text). The collectibles (`*` and `+`) are kind:'tile' so
+// their previews go through the current world's collectibleA/B.draw —
+// that way the palette icon, the editor canvas preview, and the in-game
+// art all agree. Without this the palette would always show ⭐ / 🌸
+// even when the level's world has a rainbow / gem as its collectible.
+const PALETTE = [
+  { tool: '=', label: '🟩', name: 'Grass',         kind: 'tile' },
+  { tool: '#', label: '🟫', name: 'Dirt',          kind: 'tile' },
+  { tool: '_', label: '🟧', name: 'Platform',      kind: 'tile' },
+  { tool: 'X', label: '🔺', name: 'Spikes',        kind: 'tile' },
+  { tool: '*', label: '⭐', name: 'Collectible A', kind: 'tile' },
+  { tool: '+', label: '🌸', name: 'Collectible B', kind: 'tile' },
+  { tool: 'W', label: '😼', name: 'Grumpy Friend', kind: 'icon' },
+  { tool: 'S', label: '🏁', name: 'Start',         kind: 'icon' },
+  { tool: 'G', label: '🚩', name: 'Goal',          kind: 'icon' },
+  { tool: '.', label: '❌', name: 'Erase',         kind: 'icon' }
+];
+
+const editorCanvas = document.getElementById('editorCanvas');
+const editorCtx = editorCanvas.getContext('2d');
+
+let editor = {
+  cols: 24, rows: 14,
+  tiles: [],         // 2D array of chars
+  selectedTool: '=',
+  name: '',          // current level name (empty if unsaved)
+  editingId: null,   // if editing existing user level, its id
+  worldId: DEFAULT_WORLD_ID,  // active world for this level (step 4 adds picker UI)
+  isDirty: false,
+  painting: false,
+  lastPainted: null  // {x, y} to avoid repeats while dragging
+};
+let editorTileSize = 32;
+let editorDpr = 1;
+
+function makeEmptyTiles(cols, rows) {
+  return Array.from({ length: rows }, () => new Array(cols).fill('.'));
+}
+
+// Convert editor tiles (2D char array) into a level def {name, rows, worldId}.
+// Used both for saving and for hand-off into test play mode.
+function editorToDef() {
+  return {
+    name: editor.name || 'Untitled',
+    worldId: editor.worldId,
+    rows: editor.tiles.map(row => row.join(''))
+  };
+}
+
+// Scan tiles for start and goal (since they live in the grid).
+function findInTiles(ch) {
+  for (let y = 0; y < editor.rows; y++) {
+    for (let x = 0; x < editor.cols; x++) {
+      if (editor.tiles[y][x] === ch) return { x, y };
+    }
+  }
+  return null;
+}
+function hasStart() { return findInTiles('S') !== null; }
+function hasGoal()  { return findInTiles('G') !== null; }
+
+function newEditor(size, worldId) {
+  const dim = EDITOR_SIZES[size] || EDITOR_SIZES.medium;
+  editor.cols = dim.cols;
+  editor.rows = dim.rows;
+  editor.tiles = makeEmptyTiles(dim.cols, dim.rows);
+  editor.selectedTool = '=';
+  editor.name = '';
+  editor.editingId = null;
+  editor.worldId = (worldId && WORLDS[worldId]) ? worldId : DEFAULT_WORLD_ID;
+  editor.isDirty = false;
+  showEditor();
+}
+
+function editExistingLevel(userLvl) {
+  // Reconstruct editor state from a saved level def. Migrate older saved
+  // levels (no worldId field) to the default world transparently.
+  const rows = userLvl.rows;
+  editor.rows = rows.length;
+  editor.cols = rows[0].length;
+  editor.tiles = rows.map(r => r.split(''));
+  editor.selectedTool = '=';
+  editor.name = userLvl.name;
+  editor.editingId = userLvl.id;
+  editor.worldId = (userLvl.worldId && WORLDS[userLvl.worldId]) ? userLvl.worldId : DEFAULT_WORLD_ID;
+  editor.isDirty = false;
+  showEditor();
+}
+
+function showEditor() {
+  view = 'editor';
+  // Update the badge and apply the world's palette before anything else
+  // so the editor's appearance is correct from the first paint.
+  updateEditorWorldBadge();
+  applyWorld(editor.worldId);
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('touchControls').style.display = 'none';
+  document.getElementById('editorView').classList.remove('hidden');
+  closeAllPanels();
+  buildPalette();
+  // Resize twice — once now for the common case, once next frame as a
+  // safety net for Chrome on iPad which can return stale clientWidth on
+  // first un-hide. The ResizeObserver below the boot block also catches
+  // delayed layout-settle on slow devices.
+  resizeEditorCanvas();
+  requestAnimationFrame(() => { resizeEditorCanvas(); });
+  updateEditorButtons();
+}
+
+function leaveEditor() {
+  document.getElementById('editorView').classList.add('hidden');
+  showTitle();
+}
+
+function updateEditorButtons() {
+  const ready = hasStart() && hasGoal();
+  document.getElementById('editorTestBtn').disabled = !ready;
+}
+
+// Reflects the editor's current world in the header badge. Read-only —
+// world is locked at level creation per the design.
+function updateEditorWorldBadge() {
+  const badge = document.getElementById('editorWorldBadge');
+  if (!badge) return;
+  const wd = WORLDS[editor.worldId] || WORLDS[DEFAULT_WORLD_ID];
+  badge.textContent = `${wd.emoji} ${wd.name}`;
+}
+
+// ---------- Editor canvas resize and drawing ----------
+function resizeEditorCanvas(retriesLeft = 5) {
+  editorDpr = window.devicePixelRatio || 1;
+  const wrap = document.querySelector('.editor-canvas-wrap');
+  // Force sync layout. iOS Safari/Chrome can otherwise return stale
+  // clientWidth/clientHeight if this is called right after the editor
+  // view was un-hidden — manifested as a stretched grid that "fixed
+  // itself" when the user resized the window (which itself forced a
+  // layout). Reading offsetHeight is a standard cheap reflow trigger.
+  // eslint-disable-next-line no-unused-expressions
+  wrap.offsetHeight;
+  const maxW = wrap.clientWidth - 8;
+  const maxH = wrap.clientHeight - 8;
+  // If layout hasn't given us real dimensions yet (Chrome on iPad can
+  // take several frames to settle after we un-hide an element), retry
+  // on the next frame up to 5 times. drawEditor will be running this
+  // whole time, but rendering into a still-default 300×150 canvas that
+  // CSS would stretch to fill the wrap — which is exactly what the
+  // user reported. Each retry gives layout another frame to settle.
+  if (maxW <= 0 || maxH <= 0) {
+    if (retriesLeft > 0) {
+      requestAnimationFrame(() => resizeEditorCanvas(retriesLeft - 1));
+    }
+    return;
+  }
+  // Fit grid into the wrap
+  const cellW = Math.floor(maxW / editor.cols);
+  const cellH = Math.floor(maxH / editor.rows);
+  editorTileSize = Math.max(16, Math.min(cellW, cellH, 56));
+  const w = editorTileSize * editor.cols;
+  const h = editorTileSize * editor.rows;
+  editorCanvas.width = w * editorDpr;
+  editorCanvas.height = h * editorDpr;
+  editorCanvas.style.width = w + 'px';
+  editorCanvas.style.height = h + 'px';
+  editorCtx.setTransform(editorDpr, 0, 0, editorDpr, 0, 0);
+}
+
+function drawEditor() {
+  if (view !== 'editor') return;
+  const cs = editorTileSize;
+  const w = cs * editor.cols;
+  const h = cs * editor.rows;
+
+  // Sky background
+  const sky = editorCtx.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, getCSS('--sky-top'));
+  sky.addColorStop(1, getCSS('--sky-bot'));
+  editorCtx.fillStyle = sky;
+  editorCtx.fillRect(0, 0, w, h);
+
+  // Draw tiles using the same canonical renderer as the game canvas.
+  for (let y = 0; y < editor.rows; y++) {
+    for (let x = 0; x < editor.cols; x++) {
+      const t = editor.tiles[y][x];
+      const sx = x * cs;
+      const sy = y * cs;
+      drawTileInto(editorCtx, t, sx, sy, x, y, cs);
+    }
+  }
+
+  // Grid overlay — subtle dotted lines
+  editorCtx.strokeStyle = 'rgba(42, 74, 127, 0.12)';
+  editorCtx.lineWidth = 1;
+  editorCtx.setLineDash([2, 3]);
+  editorCtx.beginPath();
+  for (let x = 1; x < editor.cols; x++) {
+    editorCtx.moveTo(x * cs, 0);
+    editorCtx.lineTo(x * cs, h);
+  }
+  for (let y = 1; y < editor.rows; y++) {
+    editorCtx.moveTo(0, y * cs);
+    editorCtx.lineTo(w, y * cs);
+  }
+  editorCtx.stroke();
+  editorCtx.setLineDash([]);
+
+  // Border
+  editorCtx.strokeStyle = 'rgba(42, 74, 127, 0.3)';
+  editorCtx.lineWidth = 2;
+  editorCtx.strokeRect(1, 1, w - 2, h - 2);
+}
+
+// Canonical tile renderer used by BOTH the game canvas (via drawTile) and
+// the editor canvas. Dispatches the shape of solid tiles to the current
+// world so palette/shape swaps just work. Editor-only previews (star with
+// no glow, start/goal cell hints) are rendered inline since they're UX,
+// not theming.
+function drawTileInto(c, t, sx, sy, tx, ty, cs) {
+  if (t === TILE.EMPTY) return;
+  const wd = getCurrentWorld();
+  if (t === TILE.GRASS)         { wd.drawGround(c, sx, sy, tx, ty, cs);   return; }
+  if (t === TILE.DIRT)          { wd.drawDirt(c, sx, sy, tx, ty, cs);     return; }
+  if (t === TILE.PLATFORM)      { wd.drawPlatform(c, sx, sy, tx, ty, cs); return; }
+  if (t === TILE.DANGER)        { wd.drawSpikes(c, sx, sy, tx, ty, cs);   return; }
+  if (t === TILE.STAR) {
+    // Editor preview — render through the current world's collectibleA so
+    // the palette icon and canvas preview match the gameplay art. We pass
+    // bob=0 for a static preview (no pulsing in the editor).
+    wd.collectibleA.draw(c, sx + cs / 2, sy + cs / 2, cs, 0);
+  } else if (t === TILE.COLLECT_B) {
+    // Same idea for collectible B — render through the world's
+    // collectibleB so the editor preview matches gameplay art.
+    wd.collectibleB.draw(c, sx + cs / 2, sy + cs / 2, cs, 0);
+  } else if (t === TILE.START) {
+    // Subtle highlight + flag emoji to mark spawn
+    c.fillStyle = 'rgba(125, 200, 100, 0.3)';
+    c.fillRect(sx, sy, cs, cs);
+    c.font = `${cs * 0.7}px serif`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('🏁', sx + cs / 2, sy + cs / 2);
+  } else if (t === TILE.GOAL) {
+    c.fillStyle = 'rgba(255, 143, 163, 0.3)';
+    c.fillRect(sx, sy, cs, cs);
+    c.font = `${cs * 0.7}px serif`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('🚩', sx + cs / 2, sy + cs / 2);
+  } else if (t === TILE.ENEMY) {
+    // Editor preview only — gameplay enemies are drawn animated. Subtle
+    // tint + emoji so she can see where she's placing them.
+    c.fillStyle = 'rgba(120, 120, 140, 0.25)';
+    c.fillRect(sx, sy, cs, cs);
+    c.font = `${cs * 0.7}px serif`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('😼', sx + cs / 2, sy + cs / 2);
+  }
+}
+
+// ---------- Editor input ----------
+function eventToTile(ev) {
+  const rect = editorCanvas.getBoundingClientRect();
+  const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+  const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+  const x = Math.floor((clientX - rect.left) / editorTileSize);
+  const y = Math.floor((clientY - rect.top) / editorTileSize);
+  if (x < 0 || x >= editor.cols || y < 0 || y >= editor.rows) return null;
+  return { x, y };
+}
+
+function paintAt(x, y) {
+  const t = editor.selectedTool;
+  const current = editor.tiles[y][x];
+  if (current === t) return;
+  // Start and goal are unique — clear the old one first
+  if (t === 'S' && hasStart()) {
+    const old = findInTiles('S');
+    editor.tiles[old.y][old.x] = '.';
+  }
+  if (t === 'G' && hasGoal()) {
+    const old = findInTiles('G');
+    editor.tiles[old.y][old.x] = '.';
+  }
+  editor.tiles[y][x] = t;
+  editor.isDirty = true;
+  updateEditorButtons();
+}
+
+editorCanvas.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  const tile = eventToTile(e);
+  if (!tile) return;
+  editor.painting = true;
+  editor.lastPainted = tile;
+  paintAt(tile.x, tile.y);
+});
+editorCanvas.addEventListener('mousemove', (e) => {
+  if (!editor.painting) return;
+  const tile = eventToTile(e);
+  if (!tile) return;
+  if (editor.lastPainted && editor.lastPainted.x === tile.x && editor.lastPainted.y === tile.y) return;
+  editor.lastPainted = tile;
+  paintAt(tile.x, tile.y);
+});
+window.addEventListener('mouseup', () => { editor.painting = false; });
+
+editorCanvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const tile = eventToTile(e);
+  if (!tile) return;
+  editor.painting = true;
+  editor.lastPainted = tile;
+  paintAt(tile.x, tile.y);
+}, { passive: false });
+editorCanvas.addEventListener('touchmove', (e) => {
+  if (!editor.painting) return;
+  e.preventDefault();
+  const tile = eventToTile(e);
+  if (!tile) return;
+  if (editor.lastPainted && editor.lastPainted.x === tile.x && editor.lastPainted.y === tile.y) return;
+  editor.lastPainted = tile;
+  paintAt(tile.x, tile.y);
+}, { passive: false });
+editorCanvas.addEventListener('touchend', () => { editor.painting = false; });
+editorCanvas.addEventListener('touchcancel', () => { editor.painting = false; });
+
+// ---------- Palette ----------
+function buildPalette() {
+  const wrap = document.getElementById('palette');
+  wrap.innerHTML = '';
+  PALETTE.forEach(item => {
+    const btn = document.createElement('div');
+    btn.className = 'palette-item' + (editor.selectedTool === item.tool ? ' selected' : '');
+    btn.title = item.name;
+    // Wrap the per-chip render in try/catch. If a world's draw function
+    // throws for a particular tile (e.g. a future canvas.arc call with
+    // a bad radius at small `cs`), we want to lose that one chip — not
+    // abort the forEach and lose every chip after it too.
+    try {
+      if (item.kind === 'tile') {
+        const mini = document.createElement('canvas');
+        mini.width = 32 * (window.devicePixelRatio || 1);
+        mini.height = 32 * (window.devicePixelRatio || 1);
+        mini.style.width = '32px';
+        mini.style.height = '32px';
+        const mctx = mini.getContext('2d');
+        mctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+        drawTileInto(mctx, item.tool, 0, 0, 0, 0, 32);
+        btn.appendChild(mini);
+      } else {
+        btn.textContent = item.label;
+      }
+    } catch (e) {
+      // Fall back to the emoji label so the chip is still visible and
+      // clickable. Logged for the developer console.
+      btn.textContent = item.label;
+      console.warn('Palette chip render failed for', item.tool, e);
+    }
+    btn.addEventListener('click', () => {
+      editor.selectedTool = item.tool;
+      buildPalette();  // re-render to show selection
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+// ---------- Toast ----------
+let toastTimer = null;
+function showToast(msg, ms = 1800) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------- Name dialog ----------
+let nameDialogCallback = null;
+function openNameDialog(currentName, callback) {
+  nameDialogCallback = callback;
+  const input = document.getElementById('nameInput');
+  input.value = currentName || '';
+  document.getElementById('nameDialog').classList.add('open');
+  setTimeout(() => input.focus(), 100);
+}
+function closeNameDialog() {
+  document.getElementById('nameDialog').classList.remove('open');
+  nameDialogCallback = null;
+}
+document.getElementById('nameCancelBtn').addEventListener('click', closeNameDialog);
+document.getElementById('nameSaveBtn').addEventListener('click', () => {
+  const name = document.getElementById('nameInput').value.trim() || 'Untitled';
+  if (nameDialogCallback) nameDialogCallback(name);
+  closeNameDialog();
+});
+document.getElementById('nameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('nameSaveBtn').click();
+  if (e.key === 'Escape') closeNameDialog();
+});
+
+// ---------- Character import ----------
+// Workflow: tap "Import 📷" in settings → opens OS file picker → on a
+// file being picked, opens the import dialog with a preview. The dialog
+// lets the user pick a name and toggle the source-facing direction. Save
+// pushes a new entry onto customCharacters and persists it.
+let charImportState = { dataUrl: null, name: '', flipped: false };
+
+function openCharacterImport() {
+  // Trigger the hidden file input. The change handler below picks up the file.
+  document.getElementById('charImportFile').click();
+}
+
+document.getElementById('charImportFile').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  // Read into a data URL so it can live in localStorage and be drawn
+  // directly into a canvas without going back to the file system.
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rawDataUrl = String(reader.result || '');
+    if (!rawDataUrl.startsWith('data:image/')) {
+      alert("That doesn't look like an image. Try a PNG or JPG.");
+      return;
+    }
+    // Resize down to sprite size before storing — a phone photo is typically
+    // 3–5 MB at full resolution, and Safari's localStorage quota is roughly
+    // 5 MB total per origin. One unresized photo can silently exceed that.
+    // Sprites are drawn at ~tileSize * 1.2 pixels on screen, so 256px is
+    // plenty.
+    resizeImageForStorage(rawDataUrl, 256, (resizedDataUrl) => {
+      const base = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+      charImportState = { dataUrl: resizedDataUrl, name: base.slice(0, 20), flipped: false };
+      showCharacterImportDialog();
+    });
+  };
+  reader.onerror = () => alert("Couldn't read that file. Try another image.");
+  reader.readAsDataURL(file);
+  // Clear the file input so picking the same file twice in a row still fires change.
+  e.target.value = '';
+});
+
+// Loads an image from any source data URL, draws it onto an offscreen
+// canvas scaled to fit within maxDim×maxDim while preserving aspect ratio,
+// and returns the resized image as a PNG data URL. Async — uses a callback
+// because Image loading is async.
+function resizeImageForStorage(srcDataUrl, maxDim, callback) {
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) { callback(srcDataUrl); return; }  // can't resize, hope for the best
+    // Only shrink — don't upscale a small image.
+    const scale = Math.min(1, maxDim / Math.max(w, h));
+    const targetW = Math.max(1, Math.round(w * scale));
+    const targetH = Math.max(1, Math.round(h * scale));
+    const off = document.createElement('canvas');
+    off.width = targetW;
+    off.height = targetH;
+    const offCtx = off.getContext('2d');
+    offCtx.imageSmoothingQuality = 'high';
+    offCtx.drawImage(img, 0, 0, targetW, targetH);
+    // PNG preserves transparency, which we want if she's lifted the subject.
+    callback(off.toDataURL('image/png'));
+  };
+  img.onerror = () => callback(srcDataUrl);  // fall through; quota check below catches it
+  img.src = srcDataUrl;
+}
+
+function showCharacterImportDialog() {
+  const img = document.getElementById('charImportImg');
+  img.src = charImportState.dataUrl;
+  img.classList.toggle('flipped', charImportState.flipped);
+  const nameInput = document.getElementById('charImportName');
+  nameInput.value = charImportState.name;
+  document.getElementById('charImportDialog').classList.add('open');
+  setTimeout(() => nameInput.focus(), 100);
+}
+
+function closeCharacterImportDialog() {
+  document.getElementById('charImportDialog').classList.remove('open');
+  charImportState = { dataUrl: null, name: '', flipped: false };
+}
+
+document.getElementById('charImportFlipBtn').addEventListener('click', () => {
+  charImportState.flipped = !charImportState.flipped;
+  document.getElementById('charImportImg').classList.toggle('flipped', charImportState.flipped);
+});
+
+document.getElementById('charImportCancelBtn').addEventListener('click', closeCharacterImportDialog);
+
+document.getElementById('charImportSaveBtn').addEventListener('click', () => {
+  if (!charImportState.dataUrl) { closeCharacterImportDialog(); return; }
+  const name = (document.getElementById('charImportName').value.trim()) || 'Friend';
+  // Saved defaultFacing tells drawPlayer whether to mirror the sprite based
+  // on movement. If the user flipped the preview, the source image faces
+  // LEFT, so we store defaultFacing = -1; otherwise the source faces right.
+  const newChar = {
+    id: makeCharacterId(),
+    name,
+    image: charImportState.dataUrl,
+    defaultFacing: charImportState.flipped ? -1 : 1
+  };
+  customCharacters.push(newChar);
+  try {
+    saveCustomCharacters();
+  } catch (err) {
+    // localStorage is roughly 5MB per origin on iOS Safari; very large
+    // PNGs can blow the quota. Tell the user gently and undo.
+    customCharacters.pop();
+    alert("That image is too big to save. Try a smaller PNG.");
+    closeCharacterImportDialog();
+    return;
+  }
+  // Auto-select the just-imported character so she sees it in play immediately.
+  settings.character = newChar.id;
+  saveSettings();
+  if (world) world.player.char = newChar;
+  closeCharacterImportDialog();
+  buildCharChips();
+  showToast(`Added ${name} ✓`);
+});
+
+// ---------- Enemy import ----------
+// Mirrors the character import flow exactly, just operating on the
+// customEnemies array and using its own dialog DOM ids.
+let enemyImportState = { dataUrl: null, name: '', flipped: false };
+
+function openEnemyImport() {
+  document.getElementById('enemyImportFile').click();
+}
+
+document.getElementById('enemyImportFile').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rawDataUrl = String(reader.result || '');
+    if (!rawDataUrl.startsWith('data:image/')) {
+      alert("That doesn't look like an image. Try a PNG or JPG.");
+      return;
+    }
+    resizeImageForStorage(rawDataUrl, 256, (resizedDataUrl) => {
+      const base = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+      enemyImportState = { dataUrl: resizedDataUrl, name: base.slice(0, 20), flipped: false };
+      showEnemyImportDialog();
+    });
+  };
+  reader.onerror = () => alert("Couldn't read that file. Try another image.");
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+
+function showEnemyImportDialog() {
+  const img = document.getElementById('enemyImportImg');
+  img.src = enemyImportState.dataUrl;
+  img.classList.toggle('flipped', enemyImportState.flipped);
+  const nameInput = document.getElementById('enemyImportName');
+  nameInput.value = enemyImportState.name;
+  document.getElementById('enemyImportDialog').classList.add('open');
+  setTimeout(() => nameInput.focus(), 100);
+}
+
+function closeEnemyImportDialog() {
+  document.getElementById('enemyImportDialog').classList.remove('open');
+  enemyImportState = { dataUrl: null, name: '', flipped: false };
+}
+
+document.getElementById('enemyImportFlipBtn').addEventListener('click', () => {
+  enemyImportState.flipped = !enemyImportState.flipped;
+  document.getElementById('enemyImportImg').classList.toggle('flipped', enemyImportState.flipped);
+});
+
+document.getElementById('enemyImportCancelBtn').addEventListener('click', closeEnemyImportDialog);
+
+document.getElementById('enemyImportSaveBtn').addEventListener('click', () => {
+  if (!enemyImportState.dataUrl) { closeEnemyImportDialog(); return; }
+  const name = (document.getElementById('enemyImportName').value.trim()) || 'Friend';
+  const newEnemy = {
+    id: makeEnemyId(),
+    name,
+    image: enemyImportState.dataUrl,
+    defaultFacing: enemyImportState.flipped ? -1 : 1
+  };
+  customEnemies.push(newEnemy);
+  try {
+    saveCustomEnemies();
+  } catch (err) {
+    customEnemies.pop();
+    alert("That image is too big to save. Try a smaller PNG.");
+    closeEnemyImportDialog();
+    return;
+  }
+  // Auto-select the just-imported enemy
+  settings.enemyId = newEnemy.id;
+  saveSettings();
+  closeEnemyImportDialog();
+  buildEnemyChips();
+  showToast(`Added ${name} ✓`);
+});
+
+// ---------- Editor button wiring ----------
+document.getElementById('editorBackBtn').addEventListener('click', () => {
+  if (editor.isDirty) {
+    // Tiny safeguard so she doesn't lose work — but no scary modal
+    if (!confirm("Leave without saving? Your level will be lost.")) return;
+  }
+  leaveEditor();
+});
+
+document.getElementById('editorSaveBtn').addEventListener('click', () => {
+  openNameDialog(editor.name, (name) => {
+    saveCurrentEditorLevel(name);
+  });
+});
+
+document.getElementById('editorTestBtn').addEventListener('click', () => {
+  if (!hasStart() || !hasGoal()) {
+    showToast('Add a 🏁 start and a 🚩 goal first!');
+    return;
+  }
+  testLevel(editorToDef());
+});
+
+function saveCurrentEditorLevel(name) {
+  editor.name = name;
+  if (editor.editingId) {
+    // Update existing
+    const lvl = userLevels.find(l => l.id === editor.editingId);
+    if (lvl) {
+      lvl.name = name;
+      lvl.worldId = editor.worldId;
+      lvl.rows = editor.tiles.map(row => row.join(''));
+      lvl.updatedAt = Date.now();
+    }
+  } else {
+    // Create new
+    const lvl = {
+      id: makeLevelId(),
+      name,
+      worldId: editor.worldId,
+      rows: editor.tiles.map(row => row.join('')),
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    userLevels.unshift(lvl);
+    editor.editingId = lvl.id;
+  }
+  saveUserLevels();
+  editor.isDirty = false;
+  showToast('Saved ✓');
+}
+
+// ---------- Title screen: Make a Level button ----------
+document.getElementById('makeBtn').addEventListener('click', () => {
+  prepSizePanel();
+  openPanel('sizePanel');
+});
+
+// State for the size panel — what the user has currently picked. Tracked
+// in JS rather than DOM-class-only so we can't lose it to any DOM caching
+// quirk between panel sessions. prepSizePanel resets these to defaults.
+let sizePanelSelection = { size: 'medium', worldId: DEFAULT_WORLD_ID };
+
+// Resets the size panel to defaults (medium / meadow) and renders the
+// world chips. Called from every entry point into "new level" so the
+// panel never shows a stale selection.
+function prepSizePanel() {
+  sizePanelSelection = { size: 'medium', worldId: DEFAULT_WORLD_ID };
+  document.querySelectorAll('#sizeChips .chip').forEach(c => {
+    c.classList.toggle('selected', c.dataset.size === sizePanelSelection.size);
+  });
+  buildWorldChips(sizePanelSelection.worldId);
+}
+
+// Renders the world picker chips in the size panel. The selected worldId
+// is tracked in sizePanelSelection (not just the DOM) so we can read it
+// reliably at Create time.
+function buildWorldChips(initialSelected) {
+  const wrap = document.getElementById('worldChips');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  Object.values(WORLDS).forEach(wd => {
+    const chip = document.createElement('div');
+    chip.className = 'chip stacked' + (wd.id === initialSelected ? ' selected' : '');
+    chip.dataset.worldId = wd.id;
+    chip.title = wd.name;
+    chip.innerHTML =
+      `<span class="ch-emoji">${wd.emoji}</span><span class="ch-name">${wd.name}</span>`;
+    chip.addEventListener('click', () => {
+      sizePanelSelection.worldId = wd.id;
+      wrap.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+    });
+    wrap.appendChild(chip);
+  });
+}
+
+// Size picker chips just toggle selection — they're static in the DOM.
+document.querySelectorAll('#sizeChips .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    sizePanelSelection.size = chip.dataset.size;
+    document.querySelectorAll('#sizeChips .chip').forEach(c => c.classList.remove('selected'));
+    chip.classList.add('selected');
+  });
+});
+document.getElementById('sizeCancelBtn').addEventListener('click', closeAllPanels);
+document.getElementById('sizeCreateBtn').addEventListener('click', () => {
+  // Read straight from the JS state, not the DOM — eliminates any
+  // possibility of a stale .selected class leaking the wrong choice.
+  const { size, worldId } = sizePanelSelection;
+  closeAllPanels();
+  newEditor(size, worldId);
+});
+
+// ---------- Resize ----------
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  if (view === 'editor') resizeEditorCanvas();
+});
+window.addEventListener('orientationchange', () => setTimeout(() => {
+  resizeCanvas();
+  if (view === 'editor') resizeEditorCanvas();
+}, 150));
+
+// ---------- Boot ----------
+buildCharChips();
+showTitle();
+resizeCanvas();
+
+// Observe the editor canvas wrap and re-resize whenever its size changes.
+// This is more reliable than rAF retries on Chrome iPad, which can take
+// several frames to settle layout after un-hiding the editor view —
+// during those frames the user would see a stretched canvas. With the
+// observer, the moment Chrome finally computes correct dimensions, we
+// pick them up and resize the canvas accordingly.
+if (typeof ResizeObserver !== 'undefined') {
+  const ro = new ResizeObserver(() => {
+    if (view === 'editor') resizeEditorCanvas();
+  });
+  const wrap = document.querySelector('.editor-canvas-wrap');
+  if (wrap) ro.observe(wrap);
+}
+</script>
+</body>
+</html>
